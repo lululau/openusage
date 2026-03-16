@@ -20,6 +20,12 @@ interface UseAppUpdateReturn {
 }
 
 export function useAppUpdate(): UseAppUpdateReturn {
+  return {
+    updateStatus: { status: "idle" },
+    triggerInstall: () => {},
+    checkForUpdates: () => {}
+  }
+
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ status: "idle" })
   const statusRef = useRef<UpdateStatus>({ status: "idle" })
   const updateRef = useRef<Update | null>(null)
