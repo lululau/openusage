@@ -977,7 +977,9 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                         continue;
                     }
 
-                    let ide_name = ls_extract_flag(command, "--ide_name").map(|v| v.to_lowercase());
+                    let ide_name = ls_extract_flag(command, "--ide_name")
+                        .or_else(|| ls_extract_flag(command, "--override_ide_name"))
+                        .map(|v| v.to_lowercase());
                     let app_data =
                         ls_extract_flag(command, "--app_data_dir").map(|v| v.to_lowercase());
 
