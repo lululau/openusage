@@ -1,5 +1,5 @@
 (function () {
-  const BASE_URL = "https://api.z.ai"
+  const BASE_URL = "https://open.bigmodel.cn"
   const SUBSCRIPTION_URL = BASE_URL + "/api/biz/subscription/list"
   const QUOTA_URL = BASE_URL + "/api/monitor/usage/quota/limit"
   const PERIOD_MS = 5 * 60 * 60 * 1000
