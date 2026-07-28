@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "grok",
+  "name": "Grok",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#000000",
+  "links": [
+    { "label": "Grok", "url": "https://grok.com/" }
+  ],
+  "lines": [
+    { "type": "progress", "label": "SuperGrok", "scope": "overview", "primaryOrder": 1 },
+    { "type": "text", "label": "Extra usage spent", "scope": "detail" }
+  ]
+}
