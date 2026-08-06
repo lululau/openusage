@@ -10,6 +10,7 @@ import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
+import { useWidgetSnapshot } from "@/hooks/app/use-widget-snapshot"
 import { track } from "@/lib/analytics"
 import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
 import { type PluginContextAction } from "@/components/side-nav"
@@ -102,6 +103,13 @@ function App() {
     displayMode,
     menubarIconStyle,
     activeView,
+  })
+
+  useWidgetSnapshot({
+    pluginsMeta,
+    pluginSettings,
+    pluginStates,
+    displayMode,
   })
 
   useEffect(() => {

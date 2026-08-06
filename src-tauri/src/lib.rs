@@ -3,6 +3,7 @@ mod app_nap;
 mod panel;
 mod plugin_engine;
 mod tray;
+mod widget_snapshot;
 #[cfg(target_os = "macos")]
 mod webkit_config;
 
@@ -351,6 +352,16 @@ fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     Ok(log_file.to_string_lossy().to_string())
 }
 
+/// Persist usage snapshot for the macOS WidgetKit extension (App Group) and reload timelines.
+#[tauri::command]
+fn write_widget_snapshot(snapshot: widget_snapshot::WidgetSnapshotDto) -> Result<String, String> {
+    let path = widget_snapshot::write_snapshot(&snapshot)?;
+    log::info!("widget snapshot written: {}", path.display());
+    Ok(path.to_string_lossy().to_string())
+}
+
+
+
 /// Update the global shortcut registration.
 /// Pass `null` to disable the shortcut, or a shortcut string like "CommandOrControl+Shift+U".
 #[cfg(desktop)]
@@ -496,6 +507,7 @@ pub fn run() {
             start_probe_batch,
             list_plugins,
             get_log_path,
+            write_widget_snapshot,
             update_global_shortcut
         ])
         .setup(|app| {

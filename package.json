@@ -13,6 +13,8 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage.enabled",
+    "widget:build": "bash ./scripts/build-widget.sh",
+    "widget:embed": "bash ./scripts/embed-widget.sh",
     "tauri": "tauri"
   },
   "dependencies": {

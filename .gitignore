@@ -39,3 +39,8 @@ package-lock.json
 src-tauri/resources/bundled_plugins/*
 !src-tauri/resources/bundled_plugins/.gitkeep
 /antigravity-8486e461-84bb-46e8-9de0-2b48fbba8d56.md
+
+# WidgetKit (generated)
+macos/build/
+macos/OpenUsageWidget.xcodeproj/
+macos/**/*.xcuserstate

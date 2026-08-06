@@ -15,6 +15,7 @@ The app auto-updates. Install once and you're set.
 OpenUsage lives in your menu bar and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No mental math required.
 
 - **One glance.** All your AI tools, one panel.
+- **macOS widget.** Optional Notification Center / desktop WidgetKit rings (percent + remaining counts). See [docs/widgetkit.md](docs/widgetkit.md).
 - **Always up-to-date.** Refreshes automatically on a schedule you pick.
 - **Global shortcut.** Toggle the panel from anywhere with a customizable keyboard shortcut.
 - **Lightweight.** Opens instantly, stays out of your way.

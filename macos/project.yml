@@ -1,0 +1,54 @@
+name: OpenUsageWidget
+options:
+  bundleIdPrefix: com.sunstory.openusage
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.6.10"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Automatic
+    # Set DEVELOPMENT_TEAM via env when generating, or in Xcode.
+    # DEVELOPMENT_TEAM: YOUR_TEAM_ID
+targets:
+  OpenUsageWidgetExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: OpenUsageWidget
+        excludes:
+          - "**/*.entitlements"
+          - "**/Info.plist"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sunstory.openusage.widget
+        PRODUCT_NAME: OpenUsageWidgetExtension
+        INFOPLIST_FILE: OpenUsageWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: OpenUsageWidget/OpenUsageWidget.entitlements
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/../Frameworks"
+          - "@executable_path/../../../../Frameworks"
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+    info:
+      path: OpenUsageWidget/Info.plist
+      properties:
+        CFBundleDisplayName: OpenUsage
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: OpenUsageWidget/OpenUsageWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - group.com.sunstory.openusage
+        com.apple.security.temporary-exception.files.absolute-path.read-only:
+          - /Users/
+    scheme:
+      testTargets: []

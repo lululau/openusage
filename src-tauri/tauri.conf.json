@@ -31,6 +31,8 @@
     "active": true,
     "targets": "all",
     "macOS": {
+      "entitlements": "Entitlements.plist",
+      "minimumSystemVersion": "14.0",
       "dmg": {
         "appPosition": {
           "x": 180,
