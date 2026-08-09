@@ -91,6 +91,14 @@ struct UsageSnapshot: Codable, Equatable {
     var items: [UsageRingItem]
 }
 
+/// One concentric ring layer (outer → inner in array order).
+struct UsageRingLayer: Codable, Equatable {
+    var label: String
+    var fraction: Double
+    var percentText: String
+    var ringColor: String?
+}
+
 struct UsageRingItem: Codable, Equatable, Identifiable {
     var id: String
     var name: String
@@ -100,6 +108,24 @@ struct UsageRingItem: Codable, Equatable, Identifiable {
     var detailText: String?
     var ringColor: String?
     var label: String?
+    /// Concentric multi-rings when length ≥ 2 (e.g. Cursor Total/Auto/API).
+    var rings: [UsageRingLayer]?
+
+    /// Layers to draw: multi-ring payload, or a single synthetic layer from top-level fields.
+    var resolvedRings: [UsageRingLayer] {
+        if let rings, !rings.isEmpty {
+            return rings
+        }
+        let frac = fraction ?? 0
+        return [
+            UsageRingLayer(
+                label: label ?? name,
+                fraction: frac,
+                percentText: percentText,
+                ringColor: ringColor
+            ),
+        ]
+    }
 }
 
 enum UsageSnapshotStore {
@@ -150,19 +176,30 @@ extension UsageSnapshot {
         items: [
             UsageRingItem(
                 id: "grok", name: "Grok", iconFile: nil, fraction: 0.72,
-                percentText: "72%", detailText: nil, ringColor: nil, label: "SuperGrok"
+                percentText: "72%", detailText: nil, ringColor: nil, label: "SuperGrok",
+                rings: nil
             ),
             UsageRingItem(
-                id: "antigravity", name: "Antigravity", iconFile: nil, fraction: 1.0,
-                percentText: "100%", detailText: nil, ringColor: nil, label: "Gemini Pro"
+                id: "antigravity", name: "Antigravity", iconFile: nil, fraction: 0.85,
+                percentText: "85%", detailText: nil, ringColor: "#5AC8FA", label: "Gemini Flash",
+                rings: [
+                    UsageRingLayer(label: "Gemini Flash", fraction: 0.85, percentText: "85%", ringColor: "#5AC8FA"),
+                    UsageRingLayer(label: "Claude", fraction: 0.60, percentText: "60%", ringColor: "#FF9F0A"),
+                ]
             ),
             UsageRingItem(
-                id: "cursor", name: "Cursor", iconFile: nil, fraction: 0.5,
-                percentText: "500", detailText: nil, ringColor: nil, label: "Requests"
+                id: "cursor", name: "Cursor", iconFile: nil, fraction: 0.58,
+                percentText: "58%", detailText: nil, ringColor: "#4CD964", label: "Total usage",
+                rings: [
+                    UsageRingLayer(label: "Total usage", fraction: 0.58, percentText: "58%", ringColor: "#4CD964"),
+                    UsageRingLayer(label: "Auto usage", fraction: 0.30, percentText: "30%", ringColor: "#5AC8FA"),
+                    UsageRingLayer(label: "API usage", fraction: 0.72, percentText: "72%", ringColor: "#FF9F0A"),
+                ]
             ),
             UsageRingItem(
                 id: "zai", name: "Z.ai", iconFile: nil, fraction: 0.99,
-                percentText: "99%", detailText: nil, ringColor: nil, label: "Session"
+                percentText: "99%", detailText: nil, ringColor: nil, label: "Session",
+                rings: nil
             ),
         ]
     )

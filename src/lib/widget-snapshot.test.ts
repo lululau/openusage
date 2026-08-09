@@ -21,6 +21,7 @@ describe("buildWidgetSnapshot", () => {
           id: "cursor",
           name: "Cursor",
           iconUrl: "data:image/svg+xml;base64,abc",
+          // No multi-ring labels match → fall back to primary Requests
           primaryCandidates: ["Requests"],
           lines: [],
         },
@@ -85,6 +86,7 @@ describe("buildWidgetSnapshot", () => {
     expect(cursor.percentText).toBe("500")
     expect(cursor.detailText).toBeUndefined()
     expect(cursor.label).toBe("Requests")
+    expect(cursor.rings).toBeUndefined()
 
     const claude = snap.items[1]!
     expect(claude.percentText).toBe("75%")
@@ -147,5 +149,187 @@ describe("buildWidgetSnapshot", () => {
       pluginStates: {},
     })
     expect(snap.items.map((i) => i.id)).toEqual(["a", "c"])
+  })
+
+  it("builds 3 concentric percent rings for Cursor Total / Auto / API", () => {
+    const snap = buildWidgetSnapshot({
+      displayMode: "used",
+      pluginsMeta: [
+        {
+          id: "cursor",
+          name: "Cursor",
+          iconUrl: "data:image/svg+xml;base64,cur",
+          primaryCandidates: ["Credits", "Total usage", "Requests"],
+          lines: [],
+        },
+      ],
+      pluginSettings: { order: ["cursor"], disabled: [] },
+      pluginStates: {
+        cursor: {
+          data: {
+            providerId: "cursor",
+            displayName: "Cursor",
+            iconUrl: "data:image/svg+xml;base64,cur",
+            lines: [
+              {
+                type: "progress",
+                label: "Credits",
+                used: 5,
+                limit: 20,
+                format: { kind: "dollars" },
+              },
+              {
+                type: "progress",
+                label: "Total usage",
+                used: 42,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              {
+                type: "progress",
+                label: "Auto usage",
+                used: 12,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              {
+                type: "progress",
+                label: "API usage",
+                used: 70,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+            ],
+          },
+          loading: false,
+          error: null,
+        },
+      },
+    })
+
+    const cursor = snap.items[0]!
+    expect(cursor.label).toBe("Total usage")
+    expect(cursor.percentText).toBe("42%")
+    expect(cursor.fraction).toBeCloseTo(0.42)
+    expect(cursor.rings).toHaveLength(3)
+    expect(cursor.rings!.map((r) => r.label)).toEqual([
+      "Total usage",
+      "Auto usage",
+      "API usage",
+    ])
+    expect(cursor.rings!.map((r) => r.percentText)).toEqual(["42%", "12%", "70%"])
+    // Fallback palette when lines have no color
+    expect(cursor.rings![0]!.ringColor).toBe("#4CD964")
+    expect(cursor.rings![1]!.ringColor).toBe("#5AC8FA")
+    expect(cursor.rings![2]!.ringColor).toBe("#FF9F0A")
+  })
+
+  it("builds 2 concentric rings for Antigravity Gemini Flash + Claude", () => {
+    const snap = buildWidgetSnapshot({
+      displayMode: "left",
+      pluginsMeta: [
+        {
+          id: "antigravity",
+          name: "Antigravity",
+          iconUrl: "",
+          primaryCandidates: ["Gemini Pro"],
+          lines: [],
+        },
+      ],
+      pluginSettings: { order: ["antigravity"], disabled: [] },
+      pluginStates: {
+        antigravity: {
+          data: {
+            providerId: "antigravity",
+            displayName: "Antigravity",
+            iconUrl: "",
+            lines: [
+              {
+                type: "progress",
+                label: "Gemini Pro",
+                used: 20,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              {
+                type: "progress",
+                label: "Gemini Flash",
+                used: 40,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              {
+                type: "progress",
+                label: "Claude",
+                used: 10,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+            ],
+          },
+          loading: false,
+          error: null,
+        },
+      },
+    })
+
+    const item = snap.items[0]!
+    // left mode: remaining % under the ring (primary multi-ring = Flash)
+    expect(item.label).toBe("Gemini Flash")
+    expect(item.percentText).toBe("60%")
+    expect(item.rings).toHaveLength(2)
+    expect(item.rings!.map((r) => r.label)).toEqual(["Gemini Flash", "Claude"])
+    expect(item.rings!.map((r) => r.percentText)).toEqual(["60%", "90%"])
+    // Gemini Pro is tray primary but not a widget multi-ring layer
+    expect(item.rings!.some((r) => r.label === "Gemini Pro")).toBe(false)
+  })
+
+  it("omits missing Cursor multi-ring metrics and still prefers Total over Credits", () => {
+    const snap = buildWidgetSnapshot({
+      displayMode: "used",
+      pluginsMeta: [
+        {
+          id: "cursor",
+          name: "Cursor",
+          iconUrl: "",
+          primaryCandidates: ["Credits", "Total usage"],
+          lines: [],
+        },
+      ],
+      pluginSettings: { order: ["cursor"], disabled: [] },
+      pluginStates: {
+        cursor: {
+          data: {
+            providerId: "cursor",
+            displayName: "Cursor",
+            iconUrl: "",
+            lines: [
+              {
+                type: "progress",
+                label: "Credits",
+                used: 1,
+                limit: 10,
+                format: { kind: "dollars" },
+              },
+              {
+                type: "progress",
+                label: "Total usage",
+                used: 15,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              // Auto / API absent
+            ],
+          },
+          loading: false,
+          error: null,
+        },
+      },
+    })
+
+    const cursor = snap.items[0]!
+    expect(cursor.rings).toHaveLength(1)
+    expect(cursor.rings![0]!.label).toBe("Total usage")
+    expect(cursor.percentText).toBe("15%")
   })
 })

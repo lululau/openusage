@@ -9,10 +9,20 @@ enum BatteryWidgetMetrics {
     static let ringSize: CGFloat = 56
     static let ringSizeSmall: CGFloat = 50
     static let ringSizeLarge: CGFloat = 58
-    /// Stroke width of the progress arc.
+    /// Stroke width of a single-ring card.
     static let lineWidth: CGFloat = 4.5
+    /// Slightly thinner strokes when drawing concentric multi-rings.
+    static let multiLineWidth: CGFloat = 3.2
     /// Icon inside the ring (relative to ring diameter).
     static let iconRatio: CGFloat = 0.40
+
+    /// Diameter shrink between concentric rings (index → index+1).
+    /// SwiftUI strokes are centered on the path, so clear gap between ring
+    /// edges = (centerline spacing) − strokeWidth. We want clear gap == stroke
+    /// width ⇒ centerline spacing = 2×stroke ⇒ diameter step = 4×stroke.
+    static func multiRingDiameterStep(strokeWidth: CGFloat) -> CGFloat {
+        4 * strokeWidth
+    }
     /// Primary value under ring ("94%" / "499") — Battery uses ~13pt.
     static let valueFontSize: CGFloat = 13
     /// Plugin name under value.
@@ -28,36 +38,39 @@ struct ProviderRingView: View {
     var lineWidth: CGFloat = BatteryWidgetMetrics.lineWidth
     var showName: Bool = true
 
-    private var progress: CGFloat {
-        guard let fraction = item.fraction, fraction.isFinite else { return 0 }
-        return CGFloat(min(1, max(0, fraction)))
+    private var layers: [UsageRingLayer] {
+        item.resolvedRings
     }
 
-    private var strokeColor: Color {
-        if let hex = item.ringColor, let c = Color(hex: hex) {
-            return c
-        }
-        // System battery green when healthy.
-        if progress >= 0.2 {
-            return Color(red: 0.30, green: 0.85, blue: 0.40)
-        }
-        return Color.orange
+    private var isMulti: Bool {
+        layers.count >= 2
+    }
+
+    private var strokeWidth: CGFloat {
+        isMulti ? BatteryWidgetMetrics.multiLineWidth : lineWidth
     }
 
     var body: some View {
         VStack(spacing: 6) {
             ZStack {
-                // Track (Battery-like muted gray)
-                Circle()
-                    .stroke(Color.primary.opacity(0.18), lineWidth: lineWidth)
+                ForEach(Array(layers.enumerated()), id: \.offset) { index, layer in
+                    let diameter = ringDiameter(index: index, count: layers.count)
+                    let progress = clamped(layer.fraction)
+                    let color = strokeColor(for: layer, progress: progress, index: index)
 
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(
-                        strokeColor,
-                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
+                    Circle()
+                        .stroke(Color.primary.opacity(0.18), lineWidth: strokeWidth)
+                        .frame(width: diameter, height: diameter)
+
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(
+                            color,
+                            style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: diameter, height: diameter)
+                }
 
                 PluginIconView(item: item, side: size * BatteryWidgetMetrics.iconRatio)
             }
@@ -86,10 +99,53 @@ struct ProviderRingView: View {
         .accessibilityLabel(accessibilityLabel)
     }
 
+    private func ringDiameter(index: Int, count: Int) -> CGFloat {
+        guard count > 1 else { return size }
+        let step = BatteryWidgetMetrics.multiRingDiameterStep(strokeWidth: strokeWidth)
+        let shrink = CGFloat(index) * step
+        // Keep innermost ring large enough for the center icon.
+        let minDiameter = max(size * 0.42, size * BatteryWidgetMetrics.iconRatio + strokeWidth * 2)
+        return max(size - shrink, minDiameter)
+    }
+
+    private func clamped(_ value: Double) -> CGFloat {
+        guard value.isFinite else { return 0 }
+        return CGFloat(min(1, max(0, value)))
+    }
+
+    private func strokeColor(for layer: UsageRingLayer, progress: CGFloat, index: Int) -> Color {
+        if let hex = layer.ringColor, let c = Color(hex: hex) {
+            return c
+        }
+        if let hex = item.ringColor, index == 0, let c = Color(hex: hex) {
+            return c
+        }
+        // Distinct fallbacks for multi-ring cards (outer → inner).
+        let palette: [Color] = [
+            Color(red: 0.30, green: 0.85, blue: 0.40),
+            Color(red: 0.35, green: 0.78, blue: 0.98),
+            Color(red: 1.00, green: 0.62, blue: 0.04),
+        ]
+        if isMulti, index < palette.count {
+            return palette[index]
+        }
+        if progress >= 0.2 {
+            return palette[0]
+        }
+        return Color.orange
+    }
+
     private var accessibilityLabel: String {
-        var parts = [item.name, item.percentText]
-        if let label = item.label {
-            parts.insert(label, at: 1)
+        var parts = [item.name]
+        if layers.count > 1 {
+            for layer in layers {
+                parts.append("\(layer.label) \(layer.percentText)")
+            }
+        } else {
+            if let label = item.label {
+                parts.append(label)
+            }
+            parts.append(item.percentText)
         }
         return parts.joined(separator: ", ")
     }

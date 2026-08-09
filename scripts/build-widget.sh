@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # Build the macOS WidgetKit extension (.appex) via XcodeGen + xcodebuild.
+#
+# Default: compile with CODE_SIGNING_ALLOWED=NO (no DEVELOPMENT_TEAM / Xcode
+# account required). `bun run widget:embed` re-signs the .appex into the host
+# app with a local Apple Development identity.
+#
+# Optional automatic signing (needs Xcode signed-in to the team):
+#   DEVELOPMENT_TEAM=XXXXXXXXXX WIDGET_CODE_SIGN=auto bun run widget:build
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,45 +29,100 @@ fi
 
 xcodegen generate --spec project.yml
 
-SIGN_ARGS=(
-  CODE_SIGN_STYLE=Automatic
-  CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-Apple Development}"
-)
-if [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
-  echo "Using DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM"
-  SIGN_ARGS+=(DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM")
-fi
+# First non-revoked Apple Development identity hash (for logging / auto team).
+pick_dev_identity() {
+  security find-identity -v -p codesigning 2>/dev/null \
+    | awk '/Apple Development/ && !/CSSMERR/ { print $2; exit }'
+}
 
-set +e
-xcodebuild \
-  -project OpenUsageWidget.xcodeproj \
-  -scheme OpenUsageWidgetExtension \
-  -configuration Release \
-  -derivedDataPath "$DERIVED" \
-  -destination 'platform=macOS,arch=arm64' \
-  -allowProvisioningUpdates \
-  ONLY_ACTIVE_ARCH=YES \
-  BUILD_LIBRARY_FOR_DISTRIBUTION=NO \
-  "${SIGN_ARGS[@]}" \
-  build
-STATUS=$?
-set -e
+# Team ID = OU field of the leaf cert (e.g. 9ZSG4N8477). Not the (XXXXXXXX) in CN.
+detect_development_team() {
+  local hash pem
+  hash="$(pick_dev_identity || true)"
+  [[ -n "$hash" ]] || return 1
+  pem="$(
+    security find-certificate -a -Z -p 2>/dev/null | awk -v h="$hash" '
+      BEGIN { th = toupper(h); gsub(/:/, "", th) }
+      /SHA-1 hash:/ {
+        cur = toupper($3)
+        gsub(/:/, "", cur)
+        grab = (cur == th)
+      }
+      grab { print }
+      /END CERTIFICATE/ && grab { exit }
+    '
+  )"
+  [[ -n "$pem" ]] || return 1
+  # subject=... OU=TEAMID, ...
+  printf '%s\n' "$pem" \
+    | openssl x509 -noout -subject 2>/dev/null \
+    | sed -n 's/.*OU=\([^,/=]*\).*/\1/p' \
+    | head -n 1
+}
 
-# Local fallback: ad-hoc sign (App Group / Widget install may not work until properly signed).
-if [[ $STATUS -ne 0 ]]; then
-  echo "warn: automatic signing failed (exit $STATUS); retrying ad-hoc (CODE_SIGN_IDENTITY=-)"
+build_unsigned() {
+  echo "Building widget (CODE_SIGNING_ALLOWED=NO) — embed will re-sign later"
   xcodebuild \
     -project OpenUsageWidget.xcodeproj \
     -scheme OpenUsageWidgetExtension \
     -configuration Release \
     -derivedDataPath "$DERIVED" \
     -destination 'platform=macOS,arch=arm64' \
-    CODE_SIGN_IDENTITY="-" \
-    CODE_SIGN_STYLE=Manual \
-    DEVELOPMENT_TEAM= \
+    CODE_SIGNING_ALLOWED=NO \
     ONLY_ACTIVE_ARCH=YES \
     BUILD_LIBRARY_FOR_DISTRIBUTION=NO \
     build
+}
+
+build_auto_signed() {
+  local team="$1"
+  echo "Building widget with automatic signing (DEVELOPMENT_TEAM=$team)"
+  xcodebuild \
+    -project OpenUsageWidget.xcodeproj \
+    -scheme OpenUsageWidgetExtension \
+    -configuration Release \
+    -derivedDataPath "$DERIVED" \
+    -destination 'platform=macOS,arch=arm64' \
+    -allowProvisioningUpdates \
+    ONLY_ACTIVE_ARCH=YES \
+    BUILD_LIBRARY_FOR_DISTRIBUTION=NO \
+    CODE_SIGN_STYLE=Automatic \
+    CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-Apple Development}" \
+    DEVELOPMENT_TEAM="$team" \
+    build
+}
+
+MODE="${WIDGET_CODE_SIGN:-unsigned}"
+
+if [[ "$MODE" == "auto" ]]; then
+  TEAM="${DEVELOPMENT_TEAM:-}"
+  if [[ -z "$TEAM" ]]; then
+    TEAM="$(detect_development_team || true)"
+    if [[ -n "$TEAM" ]]; then
+      echo "Detected DEVELOPMENT_TEAM=$TEAM from Apple Development certificate"
+    fi
+  fi
+  if [[ -z "$TEAM" ]]; then
+    echo "warn: WIDGET_CODE_SIGN=auto but no DEVELOPMENT_TEAM; falling back to unsigned" >&2
+    build_unsigned
+  else
+    set +e
+    build_auto_signed "$TEAM"
+    STATUS=$?
+    set -e
+    if [[ $STATUS -ne 0 ]]; then
+      echo "warn: automatic signing failed (exit $STATUS); falling back to unsigned" >&2
+      echo "hint: Xcode → Settings → Accounts must include team $TEAM, or use default unsigned build" >&2
+      build_unsigned
+    fi
+  fi
+else
+  # Default path: no Xcode team / provisioning profile required.
+  if [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
+    echo "note: DEVELOPMENT_TEAM is set but ignored (WIDGET_CODE_SIGN=unsigned)."
+    echo "      Use WIDGET_CODE_SIGN=auto to enable automatic signing."
+  fi
+  build_unsigned
 fi
 
 APPEX="$(find "$DERIVED/Build/Products" -type d -name 'OpenUsageWidgetExtension.appex' | head -n 1)"
@@ -74,3 +136,4 @@ rm -rf "$OUT_DIR/OpenUsageWidgetExtension.appex"
 cp -R "$APPEX" "$OUT_DIR/OpenUsageWidgetExtension.appex"
 
 echo "✓ Widget built: $OUT_DIR/OpenUsageWidgetExtension.appex"
+echo "  Next: bun tauri build && bun run widget:embed"

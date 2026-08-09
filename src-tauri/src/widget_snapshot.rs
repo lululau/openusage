@@ -12,6 +12,16 @@ pub const SNAPSHOT_FILE_NAME: &str = "usage-snapshot.json";
 pub const ICONS_DIR_NAME: &str = "icons";
 pub const WIDGET_SUBDIR: &str = "widget";
 
+/// One concentric ring layer (outer → inner).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WidgetRingLayerDto {
+    pub label: String,
+    pub fraction: f64,
+    pub percent_text: String,
+    pub ring_color: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WidgetRingItemDto {
@@ -24,6 +34,9 @@ pub struct WidgetRingItemDto {
     pub detail_text: Option<String>,
     pub ring_color: Option<String>,
     pub label: Option<String>,
+    /// Concentric rings when length ≥ 2 (Cursor Total/Auto/API, etc.).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rings: Option<Vec<WidgetRingLayerDto>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +60,16 @@ struct WidgetSnapshotFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct WidgetRingLayerFile {
+    label: String,
+    fraction: f64,
+    percent_text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ring_color: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct WidgetRingItemFile {
     id: String,
     name: String,
@@ -57,6 +80,8 @@ struct WidgetRingItemFile {
     detail_text: Option<String>,
     ring_color: Option<String>,
     label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rings: Option<Vec<WidgetRingLayerFile>>,
 }
 
 /// Sideload-safe path: normal Application Support (not Group Containers).
@@ -156,6 +181,17 @@ pub fn write_snapshot(snapshot: &WidgetSnapshotDto) -> Result<PathBuf, String> {
 
     for item in &snapshot.items {
         let icon_file = write_icon_file(&icons_dir, &item.id, &item.icon_data_url);
+        let rings = item.rings.as_ref().map(|layers| {
+            layers
+                .iter()
+                .map(|l| WidgetRingLayerFile {
+                    label: l.label.clone(),
+                    fraction: l.fraction,
+                    percent_text: l.percent_text.clone(),
+                    ring_color: l.ring_color.clone(),
+                })
+                .collect()
+        });
         file_items.push(WidgetRingItemFile {
             id: item.id.clone(),
             name: item.name.clone(),
@@ -165,6 +201,7 @@ pub fn write_snapshot(snapshot: &WidgetSnapshotDto) -> Result<PathBuf, String> {
             detail_text: item.detail_text.clone(),
             ring_color: item.ring_color.clone(),
             label: item.label.clone(),
+            rings,
         });
     }
 

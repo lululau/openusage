@@ -5,8 +5,11 @@
 Native **WidgetKit** extension that shows enabled providers as circular gauges (battery-widget style):
 
 - Center: plugin icon  
-- Below ring: **percent** always  
-- For `count` / `dollars` primary metrics (e.g. Cursor requests): **second line** with remaining/used amount  
+- Below ring: **one** value line — `%` for percent metrics, remaining/used amount for `count` / `dollars`  
+- **Concentric multi-rings** when the snapshot includes `rings[]` (outer → inner):
+  - **Cursor**: Total usage · Auto usage · API usage (all percent when present)
+  - **Antigravity**: Gemini Flash · Claude  
+- Other plugins: single ring from tray primary metric  
 
 Data path: main Tauri app probes plugins → frontend builds snapshot → Rust writes App Group JSON + SVG icons → `WidgetCenter.reloadAllTimelines()`.
 
@@ -47,25 +50,29 @@ Schema (camelCase):
       "id": "cursor",
       "name": "Cursor",
       "iconFile": "icons/cursor.svg",
-      "fraction": 0.5,
-      "percentText": "50%",
-      "detailText": "500 requests left",
-      "ringColor": null,
-      "label": "Requests"
+      "fraction": 0.58,
+      "percentText": "58%",
+      "ringColor": "#4CD964",
+      "label": "Total usage",
+      "rings": [
+        { "label": "Total usage", "fraction": 0.58, "percentText": "58%", "ringColor": "#4CD964" },
+        { "label": "Auto usage", "fraction": 0.30, "percentText": "30%", "ringColor": "#5AC8FA" },
+        { "label": "API usage", "fraction": 0.72, "percentText": "72%", "ringColor": "#FF9F0A" }
+      ]
     }
   ]
 }
 ```
 
-- `percent` format → `detailText` omitted  
-- `count` / `dollars` → `detailText` includes amount (+ ` left` when display mode is left)
+- `rings` optional; outer → inner. Widget falls back to top-level `fraction` when missing/single.  
+- Primary under-ring text is the first multi-ring layer (Cursor → Total usage; Antigravity → Gemini Flash).
 
 ## Build & install (order matters)
 
 ```bash
-export DEVELOPMENT_TEAM=XXXXXXXXXX
-# Prefer SHA hash if multiple certs share the same CN:
-export CODESIGN_IDENTITY=890ACF6B...
+# widget:build — unsigned compile (no DEVELOPMENT_TEAM needed)
+# widget:embed — defaults to ad-hoc re-sign (local launch). Do NOT use Apple
+#   Development here if you hit launchd error 163 / “malware” quarantine.
 
 bun run widget:build
 bun tauri build
@@ -74,14 +81,19 @@ bun run widget:embed
 # ONLY AFTER embed — copy the release bundle (not a mid-build copy):
 rm -rf /Applications/OpenUsage.app
 cp -R src-tauri/target/release/bundle/macos/OpenUsage.app /Applications/
+xattr -cr /Applications/OpenUsage.app
 open /Applications/OpenUsage.app
+
+# Optional:
+#   WIDGET_CODE_SIGN=auto DEVELOPMENT_TEAM=… bun run widget:build
+#   CODESIGN_IDENTITY=<sha1> bun run widget:embed   # real cert (may fail Gatekeeper)
 ```
 
 Then: **desktop right-click → Edit Widgets** (or Notification Center → Edit) → search **OpenUsage**.
 
 `scripts/build-release.sh` runs widget build/embed when `xcodegen` is available.
 
-Requirements: Xcode, `xcodegen` (`brew install xcodegen`), Apple Development cert.
+Requirements: Xcode, `xcodegen` (`brew install xcodegen`), Apple Development cert for embed re-sign.
 
 ### Why the widget might not appear
 
