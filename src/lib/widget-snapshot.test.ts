@@ -224,7 +224,7 @@ describe("buildWidgetSnapshot", () => {
     expect(cursor.rings![2]!.ringColor).toBe("#FF9F0A")
   })
 
-  it("builds 2 concentric rings for Antigravity Gemini Flash + Claude", () => {
+  it("builds 2 concentric 5h rings for Antigravity Session + Claude, with weekly alternate", () => {
     const snap = buildWidgetSnapshot({
       displayMode: "left",
       pluginsMeta: [
@@ -232,7 +232,7 @@ describe("buildWidgetSnapshot", () => {
           id: "antigravity",
           name: "Antigravity",
           iconUrl: "",
-          primaryCandidates: ["Gemini Pro"],
+          primaryCandidates: ["Session"],
           lines: [],
         },
       ],
@@ -246,15 +246,15 @@ describe("buildWidgetSnapshot", () => {
             lines: [
               {
                 type: "progress",
-                label: "Gemini Pro",
-                used: 20,
+                label: "Session",
+                used: 0,
                 limit: 100,
                 format: { kind: "percent" },
               },
               {
                 type: "progress",
-                label: "Gemini Flash",
-                used: 40,
+                label: "Weekly",
+                used: 9,
                 limit: 100,
                 format: { kind: "percent" },
               },
@@ -262,6 +262,13 @@ describe("buildWidgetSnapshot", () => {
                 type: "progress",
                 label: "Claude",
                 used: 10,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              {
+                type: "progress",
+                label: "Claude Weekly",
+                used: 0,
                 limit: 100,
                 format: { kind: "percent" },
               },
@@ -274,14 +281,16 @@ describe("buildWidgetSnapshot", () => {
     })
 
     const item = snap.items[0]!
-    // left mode: remaining % under the ring (primary multi-ring = Flash)
-    expect(item.label).toBe("Gemini Flash")
-    expect(item.percentText).toBe("60%")
+    // Default face = 5h (Session outer, Claude inner)
+    expect(item.label).toBe("Session")
+    expect(item.percentText).toBe("100%")
     expect(item.rings).toHaveLength(2)
-    expect(item.rings!.map((r) => r.label)).toEqual(["Gemini Flash", "Claude"])
-    expect(item.rings!.map((r) => r.percentText)).toEqual(["60%", "90%"])
-    // Gemini Pro is tray primary but not a widget multi-ring layer
-    expect(item.rings!.some((r) => r.label === "Gemini Pro")).toBe(false)
+    expect(item.rings!.map((r) => r.label)).toEqual(["Session", "Claude"])
+    expect(item.rings!.map((r) => r.percentText)).toEqual(["100%", "90%"])
+    // Weekly alternate for widget tap toggle
+    expect(item.weeklyRings).toHaveLength(2)
+    expect(item.weeklyRings!.map((r) => r.label)).toEqual(["Weekly", "Claude Weekly"])
+    expect(item.weeklyRings!.map((r) => r.percentText)).toEqual(["91%", "100%"])
   })
 
   it("omits missing Cursor multi-ring metrics and still prefers Total over Credits", () => {

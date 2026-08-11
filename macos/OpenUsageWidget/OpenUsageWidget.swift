@@ -32,19 +32,25 @@ struct OpenUsageWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
     var entry: Provider.Entry
 
+    private var period: AntigravityWidgetPeriod {
+        AntigravityWidgetPeriod.current
+    }
+
     var body: some View {
         switch family {
         case .systemSmall:
             RingsRowView(
                 items: entry.snapshot.items,
                 ringSize: BatteryWidgetMetrics.ringSizeSmall,
-                maxVisible: 2
+                maxVisible: 2,
+                period: period
             )
         case .systemMedium:
             RingsRowView(
                 items: entry.snapshot.items,
                 ringSize: BatteryWidgetMetrics.ringSize,
-                maxVisible: 4
+                maxVisible: 4,
+                period: period
             )
         case .systemLarge:
             largeBody
@@ -52,7 +58,8 @@ struct OpenUsageWidgetEntryView: View {
             RingsRowView(
                 items: entry.snapshot.items,
                 ringSize: BatteryWidgetMetrics.ringSize,
-                maxVisible: 4
+                maxVisible: 4,
+                period: period
             )
         }
     }
@@ -60,10 +67,18 @@ struct OpenUsageWidgetEntryView: View {
     private var largeBody: some View {
         let items = Array(entry.snapshot.items.prefix(8))
         return VStack(alignment: .leading, spacing: 8) {
-            Text("OpenUsage")
-                .font(.headline)
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
+            HStack {
+                Text("OpenUsage")
+                    .font(.headline)
+                Spacer()
+                if items.contains(where: { $0.id == "antigravity" && ($0.weeklyRings?.isEmpty == false) }) {
+                    Text(period == .weekly ? "Weekly" : "5h")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
 
             if items.isEmpty {
                 Text("Open the app to load usage")
@@ -82,7 +97,8 @@ struct OpenUsageWidgetEntryView: View {
                         ProviderRingView(
                             item: item,
                             size: BatteryWidgetMetrics.ringSizeLarge,
-                            showName: true
+                            showName: true,
+                            period: period
                         )
                     }
                 }
@@ -100,7 +116,7 @@ struct OpenUsageWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            // Whole-card tap: App Intent reloads timeline from disk only (no main-app probe).
+            // Whole-card tap: toggle Antigravity 5h↔weekly, then reload snapshot from disk.
             Button(intent: ReloadOpenUsageWidgetIntent()) {
                 OpenUsageWidgetEntryView(entry: entry)
                     .containerBackground(for: .widget) {
@@ -110,7 +126,7 @@ struct OpenUsageWidget: Widget {
             .buttonStyle(.plain)
         }
         .configurationDisplayName("OpenUsage")
-        .description("Up to 4 enabled providers as rings. Tap to re-read the latest snapshot.")
+        .description("Up to 4 enabled providers as rings. Tap to toggle Antigravity 5h/weekly.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

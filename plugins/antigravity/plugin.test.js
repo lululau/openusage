@@ -197,9 +197,9 @@ describe("antigravity plugin", () => {
 
     expect(result.plan).toBe("Pro")
 
-    // Model lines exist — 3 pool lines
+    // Model lines exist — merged Gemini Session + Claude
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Gemini Flash", "Claude"])
+    expect(labels).toEqual(["Session", "Claude"])
   })
 
   it("deduplicates models by normalized label (keeps worst-case fraction)", async () => {
@@ -212,9 +212,9 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     // Both Gemini 3.1 Pro variants have frac=0.8 → used = 20%
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
-    expect(pro).toBeTruthy()
-    expect(pro.used).toBe(20) // (1 - 0.8) * 100
+    const session = result.lines.find((l) => l.label === "Session")
+    expect(session).toBeTruthy()
+    expect(session.used).toBe(20) // worst Gemini remainingFraction 0.8 → 20% used
   })
 
   it("orders: Gemini (Pro, Flash), Claude (Opus, Sonnet), then others", async () => {
@@ -228,7 +228,7 @@ describe("antigravity plugin", () => {
 
     const labels = result.lines.map((l) => l.label)
 
-    expect(labels).toEqual(["Gemini Pro", "Gemini Flash", "Claude"])
+    expect(labels).toEqual(["Session", "Claude"])
   })
 
   it("falls back to GetCommandModelConfigs when GetUserStatus fails", async () => {
@@ -264,9 +264,9 @@ describe("antigravity plugin", () => {
     expect(result.plan).toBeNull()
 
     // Model lines present
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
-    expect(pro).toBeTruthy()
-    expect(pro.used).toBe(40) // (1 - 0.6) * 100
+    const session = result.lines.find((l) => l.label === "Session")
+    expect(session).toBeTruthy()
+    expect(session.used).toBe(40) // (1 - 0.6) * 100
   })
 
   it("uses extension port as fallback when all ports fail probing", async () => {
@@ -313,7 +313,7 @@ describe("antigravity plugin", () => {
     expect(claude.used).toBe(100)
     expect(claude.limit).toBe(100)
     expect(claude.resetsAt).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Gemini Pro")).toBeTruthy()
+    expect(result.lines.find((l) => l.label === "Session")).toBeTruthy()
   })
 
   it("dedup picks depleted variant (no quotaInfo) over non-depleted sibling", async () => {
@@ -329,7 +329,7 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
+    const pro = result.lines.find((l) => l.label === "Session")
     expect(pro).toBeTruthy()
     expect(pro.used).toBe(100)
     expect(pro.resetsAt).toBeUndefined()
@@ -350,7 +350,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
     expect(result).toBeTruthy()
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Claude"])
+    expect(labels).toEqual(["Session", "Claude"])
     expect(result.lines.every((l) => l.used === 100)).toBe(true)
   })
 
@@ -369,7 +369,7 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.length).toBe(1)
-    expect(result.lines[0].label).toBe("Gemini Pro")
+    expect(result.lines[0].label).toBe("Session")
   })
 
   it("includes resetsAt on model lines", async () => {
@@ -380,7 +380,7 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
+    const pro = result.lines.find((l) => l.label === "Session")
     expect(pro.resetsAt).toBe("2026-02-08T09:10:56Z")
   })
 
@@ -397,10 +397,10 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const over = result.lines.find((l) => l.label === "Gemini Pro")
-    const neg = result.lines.find((l) => l.label === "Gemini Flash")
-    expect(over.used).toBe(0) // clamped to 1.0 → 0% used
-    expect(neg.used).toBe(100) // clamped to 0.0 → 100% used
+    // Both Gemini variants share Session; worst remaining (-0.3) wins, then clamps to 0 → 100% used
+    const session = result.lines.find((l) => l.label === "Session")
+    expect(session).toBeTruthy()
+    expect(session.used).toBe(100)
   })
 
   it("handles missing resetTime gracefully", async () => {
@@ -415,7 +415,7 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const line = result.lines.find((l) => l.label === "Gemini Pro")
+    const line = result.lines.find((l) => l.label === "Session")
     expect(line).toBeTruthy()
     expect(line.used).toBe(50)
     expect(line.resetsAt).toBeUndefined()
@@ -524,7 +524,7 @@ describe("antigravity plugin", () => {
 
     expect(result.plan).toBeNull()
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toContain("Gemini Pro")
+    expect(labels).toContain("Session")
     expect(labels).toContain("Claude")
   })
 
@@ -628,7 +628,7 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
+    const pro = result.lines.find((l) => l.label === "Session")
     expect(pro).toBeTruthy()
     expect(pro.used).toBe(30)
   })
@@ -689,12 +689,12 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const noQuota = result.lines.find((l) => l.label === "Gemini Flash")
+    const noQuota = result.lines.find((l) => l.label === "Session")
     expect(noQuota).toBeTruthy()
+    // Depleted sibling (no quotaInfo) wins over 0.5 remaining → 100% used
     expect(noQuota.used).toBe(100)
     expect(noQuota.limit).toBe(100)
-    expect(noQuota.resetsAt).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Gemini Pro")).toBeTruthy()
+    expect(result.lines).toHaveLength(1)
   })
 
   it("decodes protobuf tokens from SQLite", async () => {
@@ -1115,7 +1115,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toContain("Gemini Flash")
+    expect(labels).toContain("Session")
     expect(labels).not.toContain("chat_20706")
     expect(labels).not.toContain("MODEL_CHAT_20706")
   })
@@ -1157,7 +1157,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro"])
+    expect(labels).toEqual(["Session"])
   })
 
   it("Cloud Code skips blacklisted model IDs", async () => {
@@ -1239,7 +1239,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Claude"])
+    expect(labels).toEqual(["Session", "Claude"])
   })
 
   it("LS filters out blacklisted model IDs (Claude Opus 4.5)", async () => {
@@ -1270,7 +1270,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Claude"])
+    expect(labels).toEqual(["Session", "Claude"])
   })
 
   it("LS still takes priority over Cloud Code with proto tokens (no regression)", async () => {
@@ -1352,5 +1352,152 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.length).toBeGreaterThan(0)
     expect(ccCalls).toBe(2)
+  })
+
+  it("prefers RetrieveUserQuotaSummary pools (Session/Weekly/Claude/Claude Weekly)", async () => {
+    const ctx = makeCtx()
+    const discovery = makeDiscovery()
+    ctx.host.ls.discover.mockReturnValue(discovery)
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
+      if (url.includes("RetrieveUserQuotaSummary")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            response: {
+              groups: [
+                {
+                  displayName: "Gemini Models",
+                  buckets: [
+                    {
+                      bucketId: "gemini-weekly",
+                      remainingFraction: 0.91340435,
+                      resetTime: "2026-08-13T14:10:34Z",
+                      window: "weekly",
+                    },
+                    {
+                      bucketId: "gemini-5h",
+                      remainingFraction: 1,
+                      resetTime: "2026-08-11T19:50:50Z",
+                      window: "5h",
+                    },
+                  ],
+                },
+                {
+                  displayName: "Claude and GPT models",
+                  buckets: [
+                    {
+                      bucketId: "3p-weekly",
+                      remainingFraction: 1,
+                      resetTime: "2026-08-18T14:50:50Z",
+                      window: "weekly",
+                    },
+                    {
+                      bucketId: "3p-5h",
+                      remainingFraction: 0.4,
+                      resetTime: "2026-08-11T19:50:50Z",
+                      window: "5h",
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        }
+      }
+      if (url.includes("GetUserStatus")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            userStatus: {
+              userTier: { name: "Google AI Pro" },
+              planStatus: { planInfo: { planName: "Pro" } },
+            },
+          }),
+        }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBe("Pro")
+    expect(result.lines.map((l) => l.label)).toEqual([
+      "Session",
+      "Weekly",
+      "Claude",
+      "Claude Weekly",
+    ])
+    expect(result.lines.map((l) => l.used)).toEqual([0, 9, 60, 0])
+    expect(result.lines[0].periodDurationMs).toBe(5 * 60 * 60 * 1000)
+    expect(result.lines[1].periodDurationMs).toBe(7 * 24 * 60 * 60 * 1000)
+    // Must not fall through to fabricating Gemini Pro/Flash rows
+    expect(result.lines.find((l) => l.label === "Gemini Pro")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "Gemini Flash")).toBeUndefined()
+  })
+
+  it("ignores unknown summary bucketIds (exact match only)", async () => {
+    const ctx = makeCtx()
+    const discovery = makeDiscovery()
+    ctx.host.ls.discover.mockReturnValue(discovery)
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
+      if (url.includes("RetrieveUserQuotaSummary")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            groups: [
+              {
+                buckets: [
+                  { bucketId: "gemini-image-5h", remainingFraction: 0.1 },
+                  { bucketId: "gemini-5h", remainingFraction: 0.75 },
+                ],
+              },
+            ],
+          }),
+        }
+      }
+      if (url.includes("GetUserStatus")) {
+        return { status: 200, bodyText: JSON.stringify({ userStatus: {} }) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.map((l) => l.label)).toEqual(["Session"])
+    expect(result.lines[0].used).toBe(25)
+  })
+
+  it("uses Cloud Code retrieveUserQuotaSummary when LS is down", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.test", "1//r", futureExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("retrieveUserQuotaSummary")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            groups: [
+              {
+                buckets: [
+                  { bucketId: "gemini-5h", remainingFraction: 0.5, resetTime: "2026-08-11T20:00:00Z" },
+                  { bucketId: "3p-weekly", remainingFraction: 0.8 },
+                ],
+              },
+            ],
+          }),
+        }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.map((l) => l.label)).toEqual(["Session", "Claude Weekly"])
+    expect(result.lines.map((l) => l.used)).toEqual([50, 20])
   })
 })

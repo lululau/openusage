@@ -37,9 +37,10 @@ struct ProviderRingView: View {
     var size: CGFloat = BatteryWidgetMetrics.ringSize
     var lineWidth: CGFloat = BatteryWidgetMetrics.lineWidth
     var showName: Bool = true
+    var period: AntigravityWidgetPeriod = .fiveHour
 
     private var layers: [UsageRingLayer] {
-        item.resolvedRings
+        item.resolvedRings(period: period)
     }
 
     private var isMulti: Bool {
@@ -48,6 +49,10 @@ struct ProviderRingView: View {
 
     private var strokeWidth: CGFloat {
         isMulti ? BatteryWidgetMetrics.multiLineWidth : lineWidth
+    }
+
+    private var valueText: String {
+        item.displayPercentText(period: period)
     }
 
     var body: some View {
@@ -78,7 +83,7 @@ struct ProviderRingView: View {
 
             // Single value line (Battery style) + optional name
             VStack(spacing: 2) {
-                Text(item.percentText)
+                Text(valueText)
                     .font(.system(size: BatteryWidgetMetrics.valueFontSize, weight: .regular, design: .default))
                     .monospacedDigit()
                     .foregroundStyle(.primary)
@@ -137,15 +142,18 @@ struct ProviderRingView: View {
 
     private var accessibilityLabel: String {
         var parts = [item.name]
+        if item.id == "antigravity" {
+            parts.append(period == .weekly ? "weekly" : "5 hour")
+        }
         if layers.count > 1 {
             for layer in layers {
                 parts.append("\(layer.label) \(layer.percentText)")
             }
         } else {
-            if let label = item.label {
+            if let label = item.displayLabel(period: period) {
                 parts.append(label)
             }
-            parts.append(item.percentText)
+            parts.append(valueText)
         }
         return parts.joined(separator: ", ")
     }
@@ -232,6 +240,7 @@ struct RingsRowView: View {
     let items: [UsageRingItem]
     var ringSize: CGFloat = BatteryWidgetMetrics.ringSize
     var maxVisible: Int = 4
+    var period: AntigravityWidgetPeriod = .fiveHour
 
     var body: some View {
         let visible = Array(items.prefix(maxVisible))
@@ -254,8 +263,13 @@ struct RingsRowView: View {
             } else {
                 HStack(alignment: .top, spacing: BatteryWidgetMetrics.rowSpacing) {
                     ForEach(visible) { item in
-                        ProviderRingView(item: item, size: ringSize, showName: true)
-                            .frame(maxWidth: .infinity)
+                        ProviderRingView(
+                            item: item,
+                            size: ringSize,
+                            showName: true,
+                            period: period
+                        )
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(.horizontal, BatteryWidgetMetrics.hPadding)

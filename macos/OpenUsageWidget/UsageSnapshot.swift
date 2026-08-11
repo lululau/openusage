@@ -109,10 +109,19 @@ struct UsageRingItem: Codable, Equatable, Identifiable {
     var ringColor: String?
     var label: String?
     /// Concentric multi-rings when length ≥ 2 (e.g. Cursor Total/Auto/API).
+    /// For Antigravity this is the default 5h face (Session + Claude).
     var rings: [UsageRingLayer]?
+    /// Antigravity weekly alternate (Weekly + Claude Weekly).
+    var weeklyRings: [UsageRingLayer]?
 
-    /// Layers to draw: multi-ring payload, or a single synthetic layer from top-level fields.
-    var resolvedRings: [UsageRingLayer] {
+    /// Layers to draw for the given period preference.
+    func resolvedRings(period: AntigravityWidgetPeriod = .fiveHour) -> [UsageRingLayer] {
+        if id == "antigravity",
+           period == .weekly,
+           let weeklyRings,
+           !weeklyRings.isEmpty {
+            return weeklyRings
+        }
         if let rings, !rings.isEmpty {
             return rings
         }
@@ -125,6 +134,36 @@ struct UsageRingItem: Codable, Equatable, Identifiable {
                 ringColor: ringColor
             ),
         ]
+    }
+
+    /// Top-level percent / label for the active period.
+    func displayPercentText(period: AntigravityWidgetPeriod = .fiveHour) -> String {
+        let layers = resolvedRings(period: period)
+        return layers.first?.percentText ?? percentText
+    }
+
+    func displayLabel(period: AntigravityWidgetPeriod = .fiveHour) -> String? {
+        let layers = resolvedRings(period: period)
+        return layers.first?.label ?? label
+    }
+}
+
+/// Shared preference: widget tap toggles Antigravity between 5h and weekly rings.
+enum AntigravityWidgetPeriod: String {
+    case fiveHour = "5h"
+    case weekly = "weekly"
+
+    static let defaultsKey = "antigravityWidgetPeriod"
+
+    static var current: AntigravityWidgetPeriod {
+        let raw = UserDefaults.standard.string(forKey: defaultsKey) ?? fiveHour.rawValue
+        return AntigravityWidgetPeriod(rawValue: raw) ?? .fiveHour
+    }
+
+    static func toggle() -> AntigravityWidgetPeriod {
+        let next: AntigravityWidgetPeriod = current == .fiveHour ? .weekly : .fiveHour
+        UserDefaults.standard.set(next.rawValue, forKey: defaultsKey)
+        return next
     }
 }
 
@@ -180,11 +219,15 @@ extension UsageSnapshot {
                 rings: nil
             ),
             UsageRingItem(
-                id: "antigravity", name: "Antigravity", iconFile: nil, fraction: 0.85,
-                percentText: "85%", detailText: nil, ringColor: "#5AC8FA", label: "Gemini Flash",
+                id: "antigravity", name: "Antigravity", iconFile: nil, fraction: 1.0,
+                percentText: "100%", detailText: nil, ringColor: "#5AC8FA", label: "Session",
                 rings: [
-                    UsageRingLayer(label: "Gemini Flash", fraction: 0.85, percentText: "85%", ringColor: "#5AC8FA"),
-                    UsageRingLayer(label: "Claude", fraction: 0.60, percentText: "60%", ringColor: "#FF9F0A"),
+                    UsageRingLayer(label: "Session", fraction: 1.0, percentText: "100%", ringColor: "#5AC8FA"),
+                    UsageRingLayer(label: "Claude", fraction: 1.0, percentText: "100%", ringColor: "#FF9F0A"),
+                ],
+                weeklyRings: [
+                    UsageRingLayer(label: "Weekly", fraction: 0.91, percentText: "91%", ringColor: "#5AC8FA"),
+                    UsageRingLayer(label: "Claude Weekly", fraction: 1.0, percentText: "100%", ringColor: "#FF9F0A"),
                 ]
             ),
             UsageRingItem(

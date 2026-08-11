@@ -6,7 +6,17 @@
     "https://cloudcode-pa.googleapis.com",
   ]
   var FETCH_MODELS_PATH = "/v1internal:fetchAvailableModels"
+  var RETRIEVE_QUOTA_SUMMARY_PATH = "/v1internal:retrieveUserQuotaSummary"
   var GOOGLE_OAUTH_URL = "https://oauth2.googleapis.com/token"
+  var SESSION_MS = 5 * 60 * 60 * 1000
+  var WEEK_MS = 7 * 24 * 60 * 60 * 1000
+  // Exact bucketId match only — never infer pools from displayName/window.
+  var SUMMARY_BUCKETS = [
+    { bucketId: "gemini-5h", label: "Session", periodMs: SESSION_MS },
+    { bucketId: "gemini-weekly", label: "Weekly", periodMs: WEEK_MS },
+    { bucketId: "3p-5h", label: "Claude", periodMs: SESSION_MS },
+    { bucketId: "3p-weekly", label: "Claude Weekly", periodMs: WEEK_MS },
+  ]
   var GOOGLE_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
   var GOOGLE_CLIENT_SECRET = "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"
   var CC_MODEL_BLACKLIST = {
@@ -252,26 +262,30 @@
   }
 
   function poolLabel(normalizedLabel) {
-    var lower = normalizedLabel.toLowerCase()
-    if (lower.indexOf("gemini") !== -1 && lower.indexOf("pro") !== -1) return "Gemini Pro"
-    if (lower.indexOf("gemini") !== -1 && lower.indexOf("flash") !== -1) return "Gemini Flash"
-    // All non-Gemini models (Claude, GPT-OSS, etc.) share a single quota pool
-    return "Claude"
+    // Since 2026-05-19: all Gemini models (Pro + Flash) share one pool → Session.
+    // Claude / GPT-OSS / other non-Gemini share the Claude pool.
+    return normalizedLabel.toLowerCase().indexOf("gemini") !== -1 ? "Session" : "Claude"
   }
 
   function modelSortKey(label) {
-    var lower = label.toLowerCase()
-    // Gemini Pro variants first, then other Gemini, then Claude Opus, then other Claude, then rest
-    if (lower.indexOf("gemini") !== -1 && lower.indexOf("pro") !== -1) return "0a_" + label
-    if (lower.indexOf("gemini") !== -1) return "0b_" + label
-    if (lower.indexOf("claude") !== -1 && lower.indexOf("opus") !== -1) return "1a_" + label
-    if (lower.indexOf("claude") !== -1) return "1b_" + label
-    return "2_" + label
+    return label === "Session" || label === "Weekly" ? "0_" + label : "1_" + label
   }
 
-  var QUOTA_PERIOD_MS = 5 * 60 * 60 * 1000 // 5 hours
+  function formatPlan(raw) {
+    if (typeof raw !== "string") return null
+    var trimmed = raw.trim()
+    if (!trimmed) return null
+    if (trimmed.indexOf("Google AI ") === 0) {
+      return trimmed.slice("Google AI ".length).trim() || null
+    }
+    var lower = trimmed.toLowerCase()
+    if (lower.indexOf("ultra") !== -1) return "Ultra"
+    if (lower.indexOf("pro") !== -1) return "Pro"
+    if (lower.indexOf("free") !== -1) return "Free"
+    return trimmed
+  }
 
-  function modelLine(ctx, label, remainingFraction, resetTime) {
+  function modelLine(ctx, label, remainingFraction, resetTime, periodMs) {
     var clamped = Math.max(0, Math.min(1, remainingFraction))
     var used = Math.round((1 - clamped) * 100)
     return ctx.line.progress({
@@ -280,10 +294,70 @@
       limit: 100,
       format: { kind: "percent" },
       resetsAt: resetTime || undefined,
-      periodDurationMs: QUOTA_PERIOD_MS,
+      periodDurationMs: periodMs || SESSION_MS,
     })
   }
 
+  /**
+   * Parse RetrieveUserQuotaSummary (LS envelope or bare Cloud Code payload).
+   * Returns [] when groups are present (authoritative, even if no usable buckets).
+   * Returns null when the body is not a summary (caller may fall back to legacy).
+   */
+  function parseQuotaSummary(data) {
+    if (!data || typeof data !== "object") return null
+    var root = data.response && typeof data.response === "object" ? data.response : data
+    var groups = root.groups
+    if (!Array.isArray(groups)) return null
+
+    var pooled = {}
+    for (var gi = 0; gi < groups.length; gi++) {
+      var group = groups[gi]
+      var buckets = (group && Array.isArray(group.buckets)) ? group.buckets : []
+      for (var bi = 0; bi < buckets.length; bi++) {
+        var bucket = buckets[bi]
+        if (!bucket || typeof bucket !== "object") continue
+        var id = bucket.bucketId
+        if (typeof id !== "string" || !id) continue
+        var matched = false
+        for (var si = 0; si < SUMMARY_BUCKETS.length; si++) {
+          if (SUMMARY_BUCKETS[si].bucketId === id) { matched = true; break }
+        }
+        if (!matched) continue
+        if (pooled[id]) continue
+        var frac = bucket.remainingFraction
+        if (typeof frac !== "number" || !Number.isFinite(frac)) continue
+        pooled[id] = {
+          remainingFraction: frac,
+          resetTime: (typeof bucket.resetTime === "string" && bucket.resetTime) ? bucket.resetTime : undefined,
+        }
+      }
+    }
+
+    var lines = []
+    for (var i = 0; i < SUMMARY_BUCKETS.length; i++) {
+      var spec = SUMMARY_BUCKETS[i]
+      var entry = pooled[spec.bucketId]
+      if (!entry) continue
+      lines.push({
+        label: spec.label,
+        remainingFraction: entry.remainingFraction,
+        resetTime: entry.resetTime,
+        periodMs: spec.periodMs,
+      })
+    }
+    return lines
+  }
+
+  function buildSummaryLines(ctx, summaryRows) {
+    var lines = []
+    for (var i = 0; i < summaryRows.length; i++) {
+      var row = summaryRows[i]
+      lines.push(modelLine(ctx, row.label, row.remainingFraction, row.resetTime, row.periodMs))
+    }
+    return lines
+  }
+
+  /** Legacy 5h-only pooling: Gemini → Session, non-Gemini → Claude. */
   function buildModelLines(ctx, configs) {
     var deduped = {}
     for (var i = 0; i < configs.length; i++) {
@@ -317,7 +391,7 @@
 
     var lines = []
     for (var i = 0; i < models.length; i++) {
-      lines.push(modelLine(ctx, models[i].label, models[i].remainingFraction, models[i].resetTime))
+      lines.push(modelLine(ctx, models[i].label, models[i].remainingFraction, models[i].resetTime, SESSION_MS))
     }
     return lines
   }
@@ -344,6 +418,31 @@
         }
       } catch (e) {
         ctx.host.log.warn("Cloud Code request failed (" + CLOUD_CODE_URLS[i] + "): " + String(e))
+      }
+    }
+    return null
+  }
+
+  function probeCloudCodeQuotaSummary(ctx, token) {
+    for (var i = 0; i < CLOUD_CODE_URLS.length; i++) {
+      try {
+        var resp = ctx.host.http.request({
+          method: "POST",
+          url: CLOUD_CODE_URLS[i] + RETRIEVE_QUOTA_SUMMARY_PATH,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+            "User-Agent": "antigravity",
+          },
+          bodyText: "{}",
+          timeoutMs: 15000,
+        })
+        if (ctx.util.isAuthStatus(resp.status)) return { _authFailed: true }
+        if (resp.status >= 200 && resp.status < 300) {
+          return ctx.util.tryParseJson(resp.bodyText)
+        }
+      } catch (e) {
+        ctx.host.log.warn("Cloud Code quota summary failed (" + CLOUD_CODE_URLS[i] + "): " + String(e))
       }
     }
     return null
@@ -392,13 +491,40 @@
     }
     if (apiKey) metadata.apiKey = apiKey
 
-    // Try GetUserStatus first, fall back to GetCommandModelConfigs
-    var data = null
+    // Prefer RetrieveUserQuotaSummary (merged pools + weekly windows).
+    var summaryData = null
     try {
-      data = callLs(ctx, found.port, found.scheme, discovery.csrf, "GetUserStatus", { metadata: metadata })
+      summaryData = callLs(ctx, found.port, found.scheme, discovery.csrf, "RetrieveUserQuotaSummary", { metadata: metadata })
+    } catch (e) {
+      ctx.host.log.warn("RetrieveUserQuotaSummary threw: " + String(e))
+    }
+    var summaryRows = summaryData ? parseQuotaSummary(summaryData) : null
+
+    // Plan name from GetUserStatus (prefer userTier over Windsurf planInfo).
+    var plan = null
+    var userStatusData = null
+    try {
+      userStatusData = callLs(ctx, found.port, found.scheme, discovery.csrf, "GetUserStatus", { metadata: metadata })
     } catch (e) {
       ctx.host.log.warn("GetUserStatus threw: " + String(e))
     }
+    if (userStatusData && userStatusData.userStatus) {
+      var us = userStatusData.userStatus
+      var tierName = us.userTier && us.userTier.name
+      var planName = us.planStatus && us.planStatus.planInfo && us.planStatus.planInfo.planName
+      plan = formatPlan(tierName || planName)
+    }
+
+    if (summaryRows !== null) {
+      var summaryLines = buildSummaryLines(ctx, summaryRows)
+      if (summaryLines.length > 0) return { plan: plan, lines: summaryLines }
+      // Parsed summary with zero usable buckets is authoritative — do not fabricate from legacy.
+      ctx.host.log.warn("quota summary returned no usable buckets")
+      return null
+    }
+
+    // Legacy fallback: per-model 5h quotas collapsed into Session / Claude.
+    var data = userStatusData
     var hasUserStatus = data && data.userStatus
 
     if (!hasUserStatus) {
@@ -406,7 +532,6 @@
       data = callLs(ctx, found.port, found.scheme, discovery.csrf, "GetCommandModelConfigs", { metadata: metadata })
     }
 
-    // Parse model configs
     var configs
     if (hasUserStatus) {
       configs = (data.userStatus.cascadeModelConfigData || {}).clientModelConfigs || []
@@ -426,14 +551,27 @@
     var lines = buildModelLines(ctx, filtered)
     if (lines.length === 0) return null
 
-    var plan = null
-    if (hasUserStatus) {
-      var ps = data.userStatus.planStatus || {}
-      var pi = ps.planInfo || {}
-      plan = pi.planName || null
+    return { plan: plan, lines: lines }
+  }
+
+  function probeCloudCodeWithToken(ctx, token) {
+    var summaryData = probeCloudCodeQuotaSummary(ctx, token)
+    if (summaryData && summaryData._authFailed) return summaryData
+    if (summaryData) {
+      var summaryRows = parseQuotaSummary(summaryData)
+      if (summaryRows !== null) {
+        var summaryLines = buildSummaryLines(ctx, summaryRows)
+        if (summaryLines.length > 0) return { plan: null, lines: summaryLines }
+        return null
+      }
     }
 
-    return { plan: plan, lines: lines }
+    var ccData = probeCloudCode(ctx, token)
+    if (!ccData || ccData._authFailed) return ccData
+    var configs = parseCloudCodeModels(ccData)
+    var lines = buildModelLines(ctx, configs)
+    if (lines.length > 0) return { plan: null, lines: lines }
+    return null
   }
 
   // --- Probe ---
@@ -459,23 +597,21 @@
 
     if (tokens.length === 0) throw "Start Antigravity and try again."
 
-    var ccData = null
+    var result = null
     for (var i = 0; i < tokens.length; i++) {
-      ccData = probeCloudCode(ctx, tokens[i])
-      if (ccData && !ccData._authFailed) break
-      ccData = null
+      result = probeCloudCodeWithToken(ctx, tokens[i])
+      if (result && result._authFailed) { result = null; continue }
+      if (result) break
+      result = null
     }
 
-    if (!ccData && proto && proto.refreshToken) {
+    if (!result && proto && proto.refreshToken) {
       var refreshed = refreshAccessToken(ctx, proto.refreshToken)
-      if (refreshed) ccData = probeCloudCode(ctx, refreshed)
+      if (refreshed) result = probeCloudCodeWithToken(ctx, refreshed)
+      if (result && result._authFailed) result = null
     }
 
-    if (ccData && !ccData._authFailed) {
-      var configs = parseCloudCodeModels(ccData)
-      var lines = buildModelLines(ctx, configs)
-      if (lines.length > 0) return { plan: null, lines: lines }
-    }
+    if (result && result.lines && result.lines.length > 0) return result
 
     throw "Start Antigravity and try again."
   }

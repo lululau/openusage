@@ -11,7 +11,8 @@ Antigravity is essentially a Google-branded fork of [Windsurf](windsurf.md) — 
 - **Service:** `exa.language_server_pb.LanguageServerService`
 - **Auth:** CSRF token from process args, API key from SQLite (fallback)
 - **Quota:** fraction (0.0–1.0, where 1.0 = 100% remaining)
-- **Quota window:** 5 hours
+- **Quota pools:** Gemini (Pro+Flash shared) and Claude/GPT (shared 3p pool)
+- **Quota windows:** rolling 5 hours + weekly per pool
 - **Timestamps:** ISO 8601
 - **Requires:** Antigravity IDE running (language server process), or signed-in credentials in SQLite (Cloud Code fallback)
 
@@ -45,9 +46,66 @@ Port and CSRF token change on every IDE restart. The LS may use HTTPS with a sel
 
 ## Endpoints
 
-### GetUserStatus (primary)
+### RetrieveUserQuotaSummary (primary)
 
-Returns plan info and per-model quota for all models (Gemini, Claude, GPT-OSS) in a single call.
+Returns the two shared pools with both 5-hour and weekly windows — same shape as `agy usage`.
+
+```
+POST http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary
+```
+
+Also available remotely as `POST …/v1internal:retrieveUserQuotaSummary`.
+
+#### Response (LS wraps in `response`)
+
+```jsonc
+{
+  "response": {
+    "groups": [
+      {
+        "displayName": "Gemini Models",
+        "description": "Models within this group: Gemini Flash, Gemini Pro",
+        "buckets": [
+          {
+            "bucketId": "gemini-weekly",
+            "displayName": "Weekly Limit Remaining",
+            "window": "weekly",
+            "remainingFraction": 0.91,
+            "resetTime": "2026-08-13T14:10:34Z"
+          },
+          {
+            "bucketId": "gemini-5h",
+            "displayName": "Five Hour Limit Remaining",
+            "window": "5h",
+            "remainingFraction": 1,
+            "resetTime": "2026-08-11T19:50:50Z"
+          }
+        ]
+      },
+      {
+        "displayName": "Claude and GPT models",
+        "buckets": [
+          { "bucketId": "3p-weekly", "window": "weekly", "remainingFraction": 1, "resetTime": "…" },
+          { "bucketId": "3p-5h", "window": "5h", "remainingFraction": 1, "resetTime": "…" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+OpenUsage maps exact `bucketId`s only:
+
+| bucketId | Line label | Window |
+|---|---|---|
+| `gemini-5h` | Session | 5 hours |
+| `gemini-weekly` | Weekly | 7 days |
+| `3p-5h` | Claude | 5 hours |
+| `3p-weekly` | Claude Weekly | 7 days |
+
+### GetUserStatus (plan + legacy fallback)
+
+Returns plan info and per-model quota for all models (Gemini, Claude, GPT-OSS) in a single call. Used for the plan badge (`userTier` preferred over Windsurf `planInfo.planName`). When `RetrieveUserQuotaSummary` is unavailable, per-model 5h fractions collapse into Session / Claude (worst remaining per pool).
 
 ```
 POST http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus
@@ -260,12 +318,13 @@ The Cloud Code model set is a superset of the LS model set. The LS returns only 
 3. **Strategy 1 — LS probe (primary):**
    a. Discover LS process via `ctx.host.ls.discover()` (ps + lsof)
    b. Probe ports with `GetUnleashData` to find the Connect-RPC endpoint
-   c. Include `apiKey` in metadata if available
-   d. Call `GetUserStatus` for plan name + per-model quota
-   e. Fall back to `GetCommandModelConfigs` if `GetUserStatus` fails
+   c. Call `RetrieveUserQuotaSummary` for Session/Weekly/Claude/Claude Weekly
+   d. Call `GetUserStatus` for plan name (`userTier` → `planInfo`)
+   e. If summary missing (older builds): fall back to `GetUserStatus` / `GetCommandModelConfigs` and merge Gemini→Session, non-Gemini→Claude (5h only)
 4. **Strategy 2 — Cloud Code API (fallback, only if LS fails):**
-   a. Build candidate token list: proto access_token, cached refreshed token (if fresh), apiKey (all deduplicated)
-   b. Try each token with `fetchAvailableModels`
-   c. If all fail with 401/403 and refresh token available: refresh via Google OAuth, cache result to pluginDataDir, retry once
-   d. Parse model quota: skip `isInternal` models, empty-displayName models, and blacklisted model IDs
+   a. Build candidate token list: proto access_token, cached refreshed token (if fresh), apiKey
+   b. Try `retrieveUserQuotaSummary`, then `fetchAvailableModels` legacy merge
+   c. If auth fails and refresh token available: refresh via Google OAuth, cache, retry once
 5. If both strategies fail: error "Start Antigravity and try again."
+
+macOS Widget shows Session + Claude by default; tap toggles to Weekly + Claude Weekly.

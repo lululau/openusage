@@ -12,13 +12,22 @@ export const WIDGET_MEDIUM_VISIBLE = 4
 /**
  * Concentric multi-ring metric labels per plugin (outer → inner).
  * Only progress lines that exist at probe time are included.
+ *
+ * Antigravity has dual period sets (5h default / weekly alternate). Widget
+ * tap toggles which set is shown; both are written into the snapshot.
  */
 export const WIDGET_MULTI_RING_LABELS: Readonly<Record<string, readonly string[]>> = {
   // Total (included) + Auto/Composer pool + API/$ pool
   cursor: ["Total usage", "Auto usage", "API usage"],
-  // Antigravity first-party Gemini Flash + bundled Claude pool
-  antigravity: ["Gemini Flash", "Claude"],
 }
+
+/** Antigravity period ring sets — 5h is the default widget face. */
+export const WIDGET_ANTIGRAVITY_PERIOD_LABELS = {
+  "5h": ["Session", "Claude"],
+  weekly: ["Weekly", "Claude Weekly"],
+} as const
+
+export type WidgetPeriodMode = keyof typeof WIDGET_ANTIGRAVITY_PERIOD_LABELS
 
 /** Fallback stroke colors when a metric has no `color` (outer → inner). */
 export const WIDGET_MULTI_RING_COLORS = ["#4CD964", "#5AC8FA", "#FF9F0A"] as const
@@ -72,8 +81,14 @@ export type WidgetRingItem = {
   /**
    * Concentric rings (outer → inner). When present and length ≥ 2, the widget
    * draws multiple strokes. Single-layer / missing → use top-level fraction.
+   * For Antigravity this is the default 5h set (Session + Claude).
    */
   rings?: WidgetRingLayer[]
+  /**
+   * Alternate rings for period toggle (Antigravity weekly: Weekly + Claude Weekly).
+   * Widget tap switches between `rings` (5h) and `weeklyRings`.
+   */
+  weeklyRings?: WidgetRingLayer[]
 }
 
 export type WidgetSnapshot = {
@@ -138,11 +153,10 @@ function findProgressByLabel(data: PluginOutput | null, label: string): Progress
 
 /** Collect configured multi-ring layers that exist in probe data. */
 function buildMultiRings(
-  pluginId: string,
+  labels: readonly string[] | undefined,
   data: PluginOutput | null,
   displayMode: DisplayMode
 ): WidgetRingLayer[] {
-  const labels = WIDGET_MULTI_RING_LABELS[pluginId]
   if (!labels?.length || !data) return []
 
   const rings: WidgetRingLayer[] = []
@@ -199,7 +213,18 @@ export function buildWidgetSnapshot(args: {
 
     const state = pluginStates[id]
     const data = state?.data ?? null
-    const multiRings = buildMultiRings(id, data, displayMode)
+
+    let multiRings: WidgetRingLayer[] = []
+    let weeklyRings: WidgetRingLayer[] | undefined
+
+    if (id === "antigravity") {
+      multiRings = buildMultiRings(WIDGET_ANTIGRAVITY_PERIOD_LABELS["5h"], data, displayMode)
+      const weekly = buildMultiRings(WIDGET_ANTIGRAVITY_PERIOD_LABELS.weekly, data, displayMode)
+      if (weekly.length > 0) weeklyRings = weekly
+    } else {
+      multiRings = buildMultiRings(WIDGET_MULTI_RING_LABELS[id], data, displayMode)
+    }
+
     const primary = pickPrimaryLine(meta, data)
 
     let fraction: number | undefined
@@ -209,7 +234,7 @@ export function buildWidgetSnapshot(args: {
     let rings: WidgetRingLayer[] | undefined
 
     if (multiRings.length >= 1) {
-      // Prefer multi-ring when any configured metric is present (Cursor Total / Auto / API).
+      // Prefer multi-ring when any configured metric is present.
       rings = multiRings
       const head = multiRings[0]!
       fraction = head.fraction
@@ -238,6 +263,7 @@ export function buildWidgetSnapshot(args: {
       label,
       ringColor,
       ...(rings && rings.length > 0 ? { rings } : {}),
+      ...(weeklyRings && weeklyRings.length > 0 ? { weeklyRings } : {}),
     })
 
     if (items.length >= maxItems) break

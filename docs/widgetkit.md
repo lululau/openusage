@@ -8,7 +8,7 @@ Native **WidgetKit** extension that shows enabled providers as circular gauges (
 - Below ring: **one** value line — `%` for percent metrics, remaining/used amount for `count` / `dollars`  
 - **Concentric multi-rings** when the snapshot includes `rings[]` (outer → inner):
   - **Cursor**: Total usage · Auto usage · API usage (all percent when present)
-  - **Antigravity**: Gemini Flash · Claude  
+  - **Antigravity**: Session · Claude (default 5h); tap toggles to Weekly · Claude Weekly  
 - Other plugins: single ring from tray primary metric  
 
 Data path: main Tauri app probes plugins → frontend builds snapshot → Rust writes App Group JSON + SVG icons → `WidgetCenter.reloadAllTimelines()`.
@@ -65,7 +65,7 @@ Schema (camelCase):
 ```
 
 - `rings` optional; outer → inner. Widget falls back to top-level `fraction` when missing/single.  
-- Primary under-ring text is the first multi-ring layer (Cursor → Total usage; Antigravity → Gemini Flash).
+- Primary under-ring text is the first multi-ring layer (Cursor → Total usage; Antigravity → Session / Weekly depending on period toggle).
 
 ## Build & install (order matters)
 

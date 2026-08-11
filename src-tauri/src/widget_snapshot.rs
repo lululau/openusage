@@ -37,6 +37,9 @@ pub struct WidgetRingItemDto {
     /// Concentric rings when length ≥ 2 (Cursor Total/Auto/API, etc.).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rings: Option<Vec<WidgetRingLayerDto>>,
+    /// Antigravity weekly alternate (Weekly + Claude Weekly); widget tap toggles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weekly_rings: Option<Vec<WidgetRingLayerDto>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +85,8 @@ struct WidgetRingItemFile {
     label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     rings: Option<Vec<WidgetRingLayerFile>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    weekly_rings: Option<Vec<WidgetRingLayerFile>>,
 }
 
 /// Sideload-safe path: normal Application Support (not Group Containers).
@@ -181,7 +186,7 @@ pub fn write_snapshot(snapshot: &WidgetSnapshotDto) -> Result<PathBuf, String> {
 
     for item in &snapshot.items {
         let icon_file = write_icon_file(&icons_dir, &item.id, &item.icon_data_url);
-        let rings = item.rings.as_ref().map(|layers| {
+        let map_rings = |layers: &Vec<WidgetRingLayerDto>| -> Vec<WidgetRingLayerFile> {
             layers
                 .iter()
                 .map(|l| WidgetRingLayerFile {
@@ -191,7 +196,9 @@ pub fn write_snapshot(snapshot: &WidgetSnapshotDto) -> Result<PathBuf, String> {
                     ring_color: l.ring_color.clone(),
                 })
                 .collect()
-        });
+        };
+        let rings = item.rings.as_ref().map(map_rings);
+        let weekly_rings = item.weekly_rings.as_ref().map(map_rings);
         file_items.push(WidgetRingItemFile {
             id: item.id.clone(),
             name: item.name.clone(),
@@ -202,6 +209,7 @@ pub fn write_snapshot(snapshot: &WidgetSnapshotDto) -> Result<PathBuf, String> {
             ring_color: item.ring_color.clone(),
             label: item.label.clone(),
             rings,
+            weekly_rings,
         });
     }
 
