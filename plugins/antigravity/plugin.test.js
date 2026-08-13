@@ -1059,6 +1059,63 @@ describe("antigravity plugin", () => {
     expect(capturedAuth).toBe("Bearer test-api-key-123")
   })
 
+  it("refreshes token when proto access token is expired and no other candidate token exists", async () => {
+    const ctx = makeCtx()
+    const pastExpiry = Math.floor(Date.now() / 1000) - 3600
+    setupSqliteMock(ctx, JSON.stringify([]), makeProtobufBase64(ctx, "ya29.expired-proto-token", "1//my-refresh-token", pastExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+
+    let oauthCalled = false
+    let capturedAuth = null
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("oauth2.googleapis.com/token")) {
+        oauthCalled = true
+        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed-from-expired" }) }
+      }
+      if (url.includes("retrieveUserQuotaSummary") || url.includes("fetchAvailableModels")) {
+        capturedAuth = opts.headers.Authorization
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const res = plugin.probe(ctx)
+
+    expect(oauthCalled).toBe(true)
+    expect(capturedAuth).toBe("Bearer ya29.refreshed-from-expired")
+    expect(res.lines.length).toBeGreaterThan(0)
+  })
+
+  it("refreshes token when proto access token is missing but refresh token exists", async () => {
+    const ctx = makeCtx()
+    setupSqliteMock(ctx, JSON.stringify([]), makeProtobufBase64(ctx, null, "1//refresh-only", null))
+    ctx.host.ls.discover.mockReturnValue(null)
+
+    let oauthCalled = false
+    let capturedAuth = null
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("oauth2.googleapis.com/token")) {
+        oauthCalled = true
+        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed-from-missing" }) }
+      }
+      if (url.includes("retrieveUserQuotaSummary") || url.includes("fetchAvailableModels")) {
+        capturedAuth = opts.headers.Authorization
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const res = plugin.probe(ctx)
+
+    expect(oauthCalled).toBe(true)
+    expect(capturedAuth).toBe("Bearer ya29.refreshed-from-missing")
+    expect(res.lines.length).toBeGreaterThan(0)
+  })
+
   it("handles missing/corrupt cache file gracefully", async () => {
     const ctx = makeCtx()
     setupSqliteMock(ctx, makeAuthStatusJson())

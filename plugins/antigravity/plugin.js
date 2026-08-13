@@ -109,7 +109,7 @@
         var ts = readFields(inner[4].data)
         if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
       }
-      if (!accessToken) return null
+      if (!accessToken && !refreshToken) return null
       return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
     } catch (e) {
       ctx.host.log.warn("failed to read proto tokens from antigravity DB: " + String(e))
@@ -594,8 +594,6 @@
     if (cached && cached !== (proto && proto.accessToken)) tokens.push(cached)
 
     if (apiKey && apiKey !== (proto && proto.accessToken) && apiKey !== cached) tokens.push(apiKey)
-
-    if (tokens.length === 0) throw "Start Antigravity and try again."
 
     var result = null
     for (var i = 0; i < tokens.length; i++) {
