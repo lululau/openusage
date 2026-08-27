@@ -295,6 +295,49 @@ describe("antigravity plugin", () => {
     expect(result.lines.length).toBeGreaterThan(0)
   })
 
+  it("skips internal proxy ports returning 400 and picks working port returning 200", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery({ ports: [51287, 54978] }))
+
+    let usedPort = null
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("GetUnleashData")) {
+        if (url.includes("51287")) {
+          return { status: 400, bodyText: "This is an explicit proxy server." }
+        }
+        return { status: 200, bodyText: "{}" }
+      }
+      if (url.includes("RetrieveUserQuotaSummary")) {
+        usedPort = parseInt(url.match(/:(\d+)\//)[1])
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            response: {
+              groups: [
+                {
+                  displayName: "Gemini Models",
+                  buckets: [
+                    { bucketId: "gemini-5h", remainingFraction: 0.95, resetTime: "2026-08-27T20:00:00Z" },
+                  ],
+                },
+              ],
+            },
+          }),
+        }
+      }
+      if (url.includes("GetUserStatus")) {
+        return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse()) }
+      }
+      return { status: 200, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(usedPort).toBe(54978)
+    expect(result.lines.length).toBeGreaterThan(0)
+  })
+
   it("treats models with no quotaInfo as depleted (100% used)", async () => {
     const ctx = makeCtx()
     const discovery = makeDiscovery()

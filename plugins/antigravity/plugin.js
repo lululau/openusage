@@ -195,30 +195,33 @@
   }
 
   function probePort(ctx, scheme, port, csrf) {
-    ctx.host.http.request({
-      method: "POST",
-      url: scheme + "://127.0.0.1:" + port + "/" + LS_SERVICE + "/GetUnleashData",
-      headers: {
-        "Content-Type": "application/json",
-        "Connect-Protocol-Version": "1",
-        "x-codeium-csrf-token": csrf,
-      },
-      bodyText: JSON.stringify({
-        context: {
-          properties: {
-            devMode: "false",
-            extensionVersion: "unknown",
-            ide: "antigravity",
-            ideVersion: "unknown",
-            os: "macos",
-          },
+    try {
+      var resp = ctx.host.http.request({
+        method: "POST",
+        url: scheme + "://127.0.0.1:" + port + "/" + LS_SERVICE + "/GetUnleashData",
+        headers: {
+          "Content-Type": "application/json",
+          "Connect-Protocol-Version": "1",
+          "x-codeium-csrf-token": csrf,
         },
-      }),
-      timeoutMs: 5000,
-      dangerouslyIgnoreTls: scheme === "https",
-    })
-    // Any HTTP response means this port is alive (even 400 validation errors).
-    return true
+        bodyText: JSON.stringify({
+          context: {
+            properties: {
+              devMode: "false",
+              extensionVersion: "unknown",
+              ide: "antigravity",
+              ideVersion: "unknown",
+              os: "macos",
+            },
+          },
+        }),
+        timeoutMs: 1000,
+        dangerouslyIgnoreTls: scheme === "https",
+      })
+      return !!(resp && resp.status >= 200 && resp.status < 300)
+    } catch (e) {
+      return false
+    }
   }
 
   function findWorkingPort(ctx, discovery) {
@@ -226,8 +229,8 @@
     for (var i = 0; i < ports.length; i++) {
       var port = ports[i]
       // Try HTTPS first (LS may use self-signed cert), then HTTP
-      try { if (probePort(ctx, "https", port, discovery.csrf)) return { port: port, scheme: "https" } } catch (e) { /* ignore */ }
-      try { if (probePort(ctx, "http", port, discovery.csrf)) return { port: port, scheme: "http" } } catch (e) { /* ignore */ }
+      if (probePort(ctx, "https", port, discovery.csrf)) return { port: port, scheme: "https" }
+      if (probePort(ctx, "http", port, discovery.csrf)) return { port: port, scheme: "http" }
       ctx.host.log.info("port " + port + " probe failed on both schemes")
     }
     if (discovery.extensionPort) return { port: discovery.extensionPort, scheme: "http" }
