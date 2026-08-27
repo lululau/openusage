@@ -7,7 +7,7 @@ A native **WidgetKit** extension that shows enabled providers as circular gauges
 - Center: provider icon
 - Below the ring: **one** value line — `%` for percent metrics, remaining/used amount for `count` / `dollars`
 - **Concentric multi-rings** where configured (outer → inner):
-  - **Cursor**: Total usage · Auto usage · API usage
+  - **Cursor**: Total usage · Cursor Models · Other Models
   - **Antigravity**: Session + Claude (default 5h face); tap toggles to Weekly + Claude Weekly
 - Every other provider: single ring from its menu-bar pinned metric (matching the tray), falling back to its first bounded metric
 
@@ -75,8 +75,8 @@ Schema (camelCase):
       "label": "Total usage",
       "rings": [
         { "label": "Total usage", "fraction": 0.58, "percentText": "58%", "ringColor": "#4CD964" },
-        { "label": "Auto usage", "fraction": 0.30, "percentText": "30%", "ringColor": "#5AC8FA" },
-        { "label": "API usage", "fraction": 0.72, "percentText": "72%", "ringColor": "#FF9F0A" }
+        { "label": "Cursor Models", "fraction": 0.30, "percentText": "30%", "ringColor": "#5AC8FA" },
+        { "label": "Other Models", "fraction": 0.72, "percentText": "72%", "ringColor": "#FF9F0A" }
       ]
     }
   ]
