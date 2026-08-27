@@ -50,23 +50,66 @@ final class WidgetSnapshotBuilderTests: XCTestCase {
             snapshots: [
                 "cursor": snapshot(
                     providerID: "cursor",
-                    [percentLine("Total usage", used: 58, color: "#123456"), percentLine("API usage", used: 72)]
+                    [percentLine("Total usage", used: 58, color: "#123456"), percentLine("Other Models", used: 72)]
                 )
             ]
         ))
 
         let item = try! XCTUnwrap(result.items.first)
         let rings = try! XCTUnwrap(item.rings)
-        // Auto usage has no live line this period, so only Total and API layers exist — order stays
+        // Cursor Models has no live line this period, so only Total and Other Models layers exist — order stays
         // configured (outer → inner), and the card's headline mirrors the outermost layer. Values follow
         // the global default meter style (.remaining): 58% used leaves 42% left.
-        XCTAssertEqual(rings.map(\.label), ["Total usage", "API usage"])
+        XCTAssertEqual(rings.map(\.label), ["Total usage", "Other Models"])
         XCTAssertEqual(item.label, "Total usage")
         XCTAssertEqual(item.percentText, "42%")
         XCTAssertEqual(try! XCTUnwrap(item.fraction), 0.42, accuracy: 0.0001)
         XCTAssertEqual(item.ringColor, "#123456")
         XCTAssertEqual(rings[1].ringColor, "#FF9F0A", "a colorless layer falls back to the shared palette")
         XCTAssertNil(item.weeklyRings)
+    }
+
+    func testCursorMapsAllThreeRingsWithSwiftLabels() {
+        let result = WidgetSnapshotBuilder.build(inputs(
+            ["cursor"],
+            snapshots: [
+                "cursor": snapshot(
+                    providerID: "cursor",
+                    [
+                        percentLine("Total usage", used: 10, color: "#4CD964"),
+                        percentLine("Cursor Models", used: 30, color: "#5AC8FA"),
+                        percentLine("Other Models", used: 70, color: "#FF9F0A"),
+                    ]
+                )
+            ]
+        ))
+
+        let item = try! XCTUnwrap(result.items.first)
+        let rings = try! XCTUnwrap(item.rings)
+        XCTAssertEqual(rings.count, 3)
+        XCTAssertEqual(rings.map(\.label), ["Total usage", "Cursor Models", "Other Models"])
+        XCTAssertEqual(rings.map(\.percentText), ["90%", "70%", "30%"])
+    }
+
+    func testCursorAcceptsLegacyMetricAliases() {
+        let result = WidgetSnapshotBuilder.build(inputs(
+            ["cursor"],
+            snapshots: [
+                "cursor": snapshot(
+                    providerID: "cursor",
+                    [
+                        percentLine("Total usage", used: 15),
+                        percentLine("Auto usage", used: 40),
+                        percentLine("API usage", used: 60),
+                    ]
+                )
+            ]
+        ))
+
+        let item = try! XCTUnwrap(result.items.first)
+        let rings = try! XCTUnwrap(item.rings)
+        XCTAssertEqual(rings.count, 3)
+        XCTAssertEqual(rings.map(\.label), ["Total usage", "Auto usage", "API usage"])
     }
 
     func testAntigravityWritesBothPeriodFacesWhenWeeklyExists() {

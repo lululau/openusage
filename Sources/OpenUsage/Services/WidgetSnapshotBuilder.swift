@@ -25,7 +25,7 @@ struct WidgetSnapshotItem: Codable, Equatable {
     var ringColor: String?
     /// Primary metric label, e.g. "Session".
     var label: String?
-    /// Concentric rings (outer → inner) when ≥ 2 configured metrics exist — Cursor Total/Auto/API.
+    /// Concentric rings (outer → inner) when ≥ 2 configured metrics exist — Cursor Total/Cursor Models/Other Models.
     var rings: [WidgetRingLayer]?
     /// Antigravity's alternate period face (Weekly + Claude Weekly); widget tap toggles both faces.
     var weeklyRings: [WidgetRingLayer]?
@@ -45,7 +45,7 @@ struct WidgetRingLayer: Codable, Equatable {
 /// provider, in dashboard order:
 ///
 /// - Providers with a multi-ring configuration draw concentric layers from their bounded progress lines
-///   (Cursor: Total usage · Auto usage · API usage). Only lines that actually exist are included.
+///   (Cursor: Total usage · Cursor Models · Other Models). Only lines that actually exist are included.
 /// - Antigravity writes two faces: the default 5-hour pair (Session + Claude) and the weekly alternate
 ///   (Weekly + Claude Weekly), which the widget toggles on tap.
 /// - Every other provider falls back to a single ring from its menu-bar pinned metric (matching what the
@@ -57,16 +57,21 @@ enum WidgetSnapshotBuilder {
     static let maxItems = 8
 
     /// Per-provider concentric ring labels, outer → inner. Antigravity is period-based instead (see
-    /// below), so it is not listed here.
-    private static let multiRingLabels: [String: [String]] = [
-        // Total pool, then the Auto/Composer and API/$ pools as their meters appear.
-        "cursor": ["Total usage", "Auto usage", "API usage"]
+    /// below), so it is not listed here. Each slot accepts candidate label aliases to support both
+    /// current Swift metric names and legacy probe names.
+    private static let multiRingLabels: [String: [[String]]] = [
+        // Total pool, then the Cursor Models (Auto) and Other Models (API) pools as their meters appear.
+        "cursor": [
+            ["Total usage"],
+            ["Cursor Models", "Auto usage"],
+            ["Other Models", "API usage"],
+        ]
     ]
 
     /// Antigravity's two period faces. Both are written into every snapshot so the extension can
     /// toggle without asking the app for anything.
-    private static let antigravityFiveHourLabels = ["Session", "Claude"]
-    private static let antigravityWeeklyLabels = ["Weekly", "Claude Weekly"]
+    private static let antigravityFiveHourLabels = [["Session"], ["Claude"]]
+    private static let antigravityWeeklyLabels = [["Weekly"], ["Claude Weekly"]]
 
     /// Fallback stroke colors when a metric line carries no color (outer → inner).
     private static let fallbackRingColors = ["#4CD964", "#5AC8FA", "#FF9F0A"]
@@ -95,11 +100,11 @@ enum WidgetSnapshotBuilder {
             var rings: [WidgetRingLayer]?
             var weeklyRings: [WidgetRingLayer]?
             if providerID == "antigravity" {
-                rings = buildRings(labels: antigravityFiveHourLabels, lines: lines, inputs: inputs)
-                weeklyRings = buildRings(labels: antigravityWeeklyLabels, lines: lines, inputs: inputs)
+                rings = buildRings(candidateGroups: antigravityFiveHourLabels, lines: lines, inputs: inputs)
+                weeklyRings = buildRings(candidateGroups: antigravityWeeklyLabels, lines: lines, inputs: inputs)
                 if weeklyRings?.isEmpty != false { weeklyRings = nil }
             } else {
-                rings = buildRings(labels: multiRingLabels[providerID], lines: lines, inputs: inputs)
+                rings = buildRings(candidateGroups: multiRingLabels[providerID], lines: lines, inputs: inputs)
             }
 
             if let rings, !rings.isEmpty {
@@ -161,17 +166,17 @@ enum WidgetSnapshotBuilder {
         )
     }
 
-    /// Layers for every configured label that has a live bounded line, outer → inner.
+    /// Layers for every configured ring slot that has a live bounded line, outer → inner.
     private static func buildRings(
-        labels: [String]?,
+        candidateGroups: [[String]]?,
         lines: [MetricLine],
         inputs: Inputs
     ) -> [WidgetRingLayer] {
-        guard let labels, !labels.isEmpty else { return [] }
+        guard let candidateGroups, !candidateGroups.isEmpty else { return [] }
 
         var rings: [WidgetRingLayer] = []
-        for (index, label) in labels.enumerated() {
-            let line = progressLines(lines).first { $0.label == label }
+        for (index, candidates) in candidateGroups.enumerated() {
+            let line = progressLines(lines).first { candidates.contains($0.label) }
             guard let line else { continue }
             let layer = progressLayer(
                 from: line,
