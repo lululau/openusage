@@ -124,7 +124,7 @@ POST http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUse
 }
 ```
 
-The CSRF token alone authenticates. When an API key is available from the local SQLite database, it is included in the metadata.
+The CSRF token alone authenticates local LS requests. Request metadata does not include an API key to avoid overriding the Language Server's live session with stale OAuth tokens from SQLite.
 
 #### Response
 
@@ -313,18 +313,17 @@ The Cloud Code model set is a superset of the LS model set. The LS returns only 
 
 ## Plugin Strategy
 
-1. Read `antigravityAuthStatus` from SQLite for API key (optional, may fail)
-2. Read `jetskiStateSync.agentManagerInitState` from SQLite, decode protobuf for OAuth tokens (optional, may fail)
-3. **Strategy 1 — LS probe (primary):**
+1. **Strategy 1 — LS probe (primary):**
    a. Discover LS process via `ctx.host.ls.discover()` (ps + lsof)
    b. Probe ports with `GetUnleashData` to find the Connect-RPC endpoint
    c. Call `RetrieveUserQuotaSummary` for Session/Weekly/Claude/Claude Weekly
    d. Call `GetUserStatus` for plan name (`userTier` → `planInfo`)
    e. If summary missing (older builds): fall back to `GetUserStatus` / `GetCommandModelConfigs` and merge Gemini→Session, non-Gemini→Claude (5h only)
-4. **Strategy 2 — Cloud Code API (fallback, only if LS fails):**
-   a. Build candidate token list: proto access_token, cached refreshed token (if fresh), apiKey
-   b. Try `retrieveUserQuotaSummary`, then `fetchAvailableModels` legacy merge
-   c. If auth fails and refresh token available: refresh via Google OAuth, cache, retry once
-5. If both strategies fail: error "Start Antigravity and try again."
+2. **Strategy 2 — Cloud Code API (fallback, only if LS fails):**
+   a. Read `antigravityAuthStatus` and `jetskiStateSync.agentManagerInitState` from SQLite for OAuth tokens
+   b. Build candidate token list: proto access_token, cached refreshed token (if fresh), apiKey
+   c. Try `retrieveUserQuotaSummary`, then `fetchAvailableModels` legacy merge
+   d. If auth fails and refresh token available: refresh via Google OAuth, cache, retry once
+3. If both strategies fail: error "Start Antigravity and try again."
 
 macOS Widget shows Session + Claude by default; tap toggles to Weekly + Claude Weekly.

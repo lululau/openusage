@@ -449,7 +449,7 @@ describe("antigravity plugin", () => {
     ])
   })
 
-  it("includes apiKey in LS metadata when DB has credentials", async () => {
+  it("omits apiKey in LS metadata even when DB has credentials", async () => {
     const ctx = makeCtx()
     setupSqliteMock(ctx, makeAuthStatusJson())
     const discovery = makeDiscovery()
@@ -473,7 +473,7 @@ describe("antigravity plugin", () => {
     plugin.probe(ctx)
 
     expect(capturedMetadata).toBeTruthy()
-    expect(capturedMetadata.apiKey).toBe("test-api-key-123")
+    expect(capturedMetadata.apiKey).toBeUndefined()
     expect(capturedMetadata.ideName).toBe("antigravity")
   })
 

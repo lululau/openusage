@@ -474,7 +474,7 @@
 
   // --- LS probe ---
 
-  function probeLs(ctx, apiKey) {
+  function probeLs(ctx) {
     var discovery = discoverLs(ctx)
     if (!discovery) return null
 
@@ -489,7 +489,6 @@
       ideVersion: "unknown",
       locale: "en",
     }
-    if (apiKey) metadata.apiKey = apiKey
 
     // Prefer RetrieveUserQuotaSummary (merged pools + weekly windows).
     var summaryData = null
@@ -577,11 +576,11 @@
   // --- Probe ---
 
   function probe(ctx) {
+    var lsResult = probeLs(ctx)
+    if (lsResult) return lsResult
+
     var apiKey = loadApiKey(ctx)
     var proto = loadProtoTokens(ctx)
-
-    var lsResult = probeLs(ctx, apiKey)
-    if (lsResult) return lsResult
 
     var tokens = []
     if (proto && proto.accessToken) {
