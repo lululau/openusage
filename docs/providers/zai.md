@@ -19,11 +19,13 @@ OpenUsage reads it from the first place it finds one, in this order:
 
 1. `~/.config/openusage/zai.json` — `{"apiKey":"…"}` (the file Settings writes to)
 2. `~/.config/zai/key.json`
-3. The `ZAI_API_KEY` environment variable
-4. The `GLM_API_KEY` environment variable (the legacy Zhipu name, still accepted)
+3. `~/.config/secrets/.zhipu_api_key` — a plain-text file holding only the key
+4. The `ZAI_API_KEY` environment variable
+5. The `GLM_API_KEY` environment variable (the legacy Zhipu name, still accepted)
 
-You can also add and rotate the key from **Settings → API Keys** without touching a file. Either
-way, nothing leaves your Mac except the same API calls Z.ai's own subscription UI makes.
+You can also add and rotate the key from **Settings → API Keys** without touching a file. Clearing
+the key there removes every file above, including the secrets-dir one. Either way, nothing leaves
+your Mac except the same API calls Z.ai's own subscription UI makes.
 
 ## Setup
 

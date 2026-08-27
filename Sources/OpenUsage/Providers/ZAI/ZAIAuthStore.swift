@@ -43,10 +43,13 @@ enum ZAIAuthError: Error, LocalizedError, Equatable {
 /// some users still export), mirroring the legacy plugin's lookup order.
 struct ZAIAuthStore: Sendable {
     /// Config files checked in order; first readable key wins. JSON (`apiKey` / `api_key` / `key`) or a
-    /// plain-text file containing only the key.
+    /// plain-text file containing only the key. The secrets-dir entry is a bare-text file usually
+    /// maintained by other tools or dotfiles, so it reads but Settings still saves/deletes through
+    /// `configPaths[0]`; clearing the key in Settings removes every listed path, including it.
     static let configPaths = [
         "~/.config/openusage/zai.json",
-        "~/.config/zai/key.json"
+        "~/.config/zai/key.json",
+        "~/.config/secrets/.zhipu_api_key"
     ]
     /// Environment variables checked in order. `ZAI_API_KEY` is current; `GLM_API_KEY` is the legacy
     /// Zhipu name some users still have exported.
