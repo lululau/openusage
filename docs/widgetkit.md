@@ -109,6 +109,38 @@ open /Applications/OpenUsage.app
 
 Requirements: Xcode, `xcodegen` (`brew install xcodegen`). For distribution releases the Developer ID identity signs the extension (hardened runtime), same as Sparkle and the CLI.
 
+### Local install without any Apple Developer certificate
+
+Fully verified locally-signed flow (`build_and_run.sh build` stages + signs without launching):
+
+```bash
+# 1. Assemble the host app with the REAL bundle id (widget data paths are keyed to it)
+#    and ad-hoc signing (-). PATH bump picks the Xcode Swift toolchain if the default
+#    `swift` on PATH is older than 6.2.
+PATH="/usr/bin:$PATH" BUNDLE_ID=com.robinebers.openusage CONFIG=release \
+  CODESIGN_IDENTITY=- ./script/build_and_run.sh build
+
+# 2. Compile the unsigned .appex
+./script/build-widget.sh
+
+# 3. Ad-hoc sign + embed it into dist/OpenUsage.app
+CODESIGN_IDENTITY=- ./script/embed-widget.sh
+
+# 4. Replace your installed app and launch it once
+rm -rf /Applications/OpenUsage.app
+cp -R dist/OpenUsage.app /Applications/
+xattr -cr /Applications/OpenUsage.app
+open /Applications/OpenUsage.app
+
+# 5. Desktop right-click → Edit Widgets → search OpenUsage
+```
+
+Notes:
+
+- **Keep `BUNDLE_ID=com.robinebers.openusage`.** The default `.dev` id would make the host write its snapshot under a different Application Support folder than the one the extension reads, and the widget would stay empty.
+- After every code change, rerun steps 1–3 (step 1 wipes the old bundle including the already-embedded `.appex`), then reinstall and reopen the app; remove and re-add the widget if numbers stop refreshing.
+- Ad-hoc builds are for this Mac only: no notarization, no other-machine installs, and no Sparkle feed in these bundles (update by pulling and rebuilding). A new signing identity can also re-trigger one-time Keychain/TCC prompts for provider credentials.
+
 Then: desktop right-click → **Edit Widgets** → search **OpenUsage**.
 
 ### Signing notes
