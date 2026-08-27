@@ -29,3 +29,14 @@ node_modules/
 # Local appcast / Sparkle feed output
 feed/
 appcast.xml
+
+
+/antigravity-8486e461-84bb-46e8-9de0-2b48fbba8d56.md
+
+# WidgetKit (generated)
+macos/build/
+macos/OpenUsageWidget.xcodeproj/
+macos/**/*.xcuserstate
+/docs/breadcrumbs.md
+/docs/choices.md
+/src-tauri/
