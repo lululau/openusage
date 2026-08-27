@@ -100,6 +100,9 @@ final class WidgetDataStore {
     @ObservationIgnored var onRefreshOutcome: (@MainActor (String, RefreshOutcome, ErrorCategory?, Bool) -> Void)?
     /// Wired by `ICloudUsageSyncStore`; debounced there so a concurrent provider batch produces one file.
     @ObservationIgnored var onLocalHistoryChanged: (@MainActor () -> Void)?
+    /// Wired by `AppContainer` to the macOS WidgetKit snapshot writer, so the extension reads fresh data
+    /// from disk whenever rendered snapshots change (refresh pass, cache paint, enablement toggle).
+    @ObservationIgnored var onSnapshotsDidChange: (@MainActor () -> Void)?
     @ObservationIgnored private var peerHistoryDocuments: [UsageHistoryDocument] = []
 
     /// Global meter style: whether every bounded tile (and the menu-bar value) renders as "used" or
@@ -398,6 +401,14 @@ final class WidgetDataStore {
         rebuildRenderedSnapshots()
     }
 
+    /// Fires `onSnapshotsDidChange` for the launch-time cache paint. Init loads cached snapshots
+    /// directly without passing through `rebuildRenderedSnapshots` (which fires the hook on every later
+    /// change), so wiring gets one explicit kick and the widget always starts with whatever this run
+    /// last knew.
+    func emitInitialSnapshotChange() {
+        onSnapshotsDidChange?()
+    }
+
     /// Replaces the downloaded peer set. A conflicted duplicate device file resolves to the newest
     /// valid document, and this Mac's own downloaded copy is excluded in favor of current memory.
     func setPeerHistoryDocuments(_ documents: [UsageHistoryDocument], ownDeviceID: String) {
@@ -455,6 +466,7 @@ final class WidgetDataStore {
     }
 
     private func rebuildRenderedSnapshots() {
+        defer { onSnapshotsDidChange?() }
         guard !peerHistoryDocuments.isEmpty else {
             snapshots = localSnapshots
             return

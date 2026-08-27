@@ -223,10 +223,46 @@ final class AppContainer {
         })
         self.refreshTask = Self.startPeriodicRefresh(dataStore: dataStore, telemetry: telemetry)
         localAPI.start()
+        // All stored properties are initialized above, so the writer can attach its hook now.
+        wireWidgetSnapshotWriter(dataStore: dataStore, registry: registry, layout: layout, enablement: enablement)
         // Become the notification-center delegate so banners show while frontmost — a menu-bar accessory
         // effectively always is. Notification authorization is requested the first time a trigger is
         // turned on in Settings, not at launch — triggers default off. No-op under tests.
         AppNotifications.shared.registerAsDelegate()
+    }
+
+    /// Feeds the macOS WidgetKit extension (see `docs/widgetkit.md`): after every rendered-snapshot
+    /// change — and once right here for the launch-time cache paint — rebuild the snapshot from the same
+    /// enabled/dashboard-ordered providers every other surface reads and write it for the extension to
+    /// load. Card order matches the dashboard; each card's single-ring fallback is the provider's pinned
+    /// (menu-bar) metric so tray and widget never disagree.
+    private func wireWidgetSnapshotWriter(
+        dataStore: WidgetDataStore,
+        registry: WidgetRegistry,
+        layout: LayoutStore,
+        enablement: ProviderEnablementStore
+    ) {
+        let writer = WidgetSnapshotWriter()
+        let providersByID = Dictionary(
+            registry.providers.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        dataStore.onSnapshotsDidChange = { [weak dataStore, layout] in
+            guard let dataStore else { return }
+            var preferredLabels: [String: [String]] = [:]
+            for descriptor in registry.descriptors where layout.isPinned(descriptor.id) {
+                preferredLabels[descriptor.providerID, default: []].append(descriptor.metricLabel)
+            }
+            let inputs = WidgetSnapshotBuilder.Inputs(
+                orderedEnabledProviderIDs: layout.orderedProviderIDs().filter { enablement.isEnabled($0) },
+                providersByID: providersByID,
+                snapshotsByProviderID: dataStore.snapshots,
+                preferredMetricLabelsByProviderID: preferredLabels,
+                meterStyle: dataStore.meterStyle
+            )
+            writer.write(WidgetSnapshotBuilder.build(inputs))
+        }
+        Task { [weak dataStore] in dataStore?.emitInitialSnapshotChange() }
     }
 
     deinit {
