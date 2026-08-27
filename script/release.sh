@@ -206,6 +206,23 @@ cp "$ICLOUD_PROVISIONING_PROFILE" "$APP_CONTENTS/embedded.provisionprofile"
 "$ROOT_DIR/script/embed_sparkle.sh" "$APP_BUNDLE" "$APP_BINARY" "$CODESIGN_IDENTITY" "--options runtime --timestamp"
 codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$CLI_BINARY"
 
+# Embed the macOS WidgetKit extension (docs/widgetkit.md) before the app's own signing pass. Needs
+# xcodegen to generate the extension project; when it is missing, skipping loudly keeps releases
+# un-blocked (the app ships without widgets — same behavior as before this feature) unless
+# WIDGET_REQUIRED=1 makes the gap a hard error.
+if command -v xcodegen >/dev/null 2>&1; then
+  echo "==> building + embedding macOS WidgetKit extension"
+  "$ROOT_DIR/script/build-widget.sh"
+  CODESIGN_IDENTITY="$CODESIGN_IDENTITY" SKIP_HOST_RESIGN=1 \
+    "$ROOT_DIR/script/embed-widget.sh" "$APP_BUNDLE"
+elif [ "${WIDGET_REQUIRED:-0}" = "1" ]; then
+  echo "error: WIDGET_REQUIRED=1 but xcodegen is missing (brew install xcodegen)" >&2
+  exit 1
+else
+  echo "WARNING: xcodegen not found — shipping WITHOUT the macOS WidgetKit extension." >&2
+  echo "         Install xcodegen (brew install xcodegen) and re-run to include widgets." >&2
+fi
+
 echo "==> signing app (Developer ID, hardened runtime)"
 # Not --deep: the Sparkle framework is signed above and must keep that signature.
 codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \

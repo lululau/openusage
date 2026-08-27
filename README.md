@@ -2,7 +2,7 @@
 
 Track your AI coding subscriptions from the macOS menu bar — native Swift edition.
 
-OpenUsage shows how much of your AI coding plans you've used: session and weekly limits, credits, and spend, all in one popover. Pin your most important metrics straight into the menu bar.
+OpenUsage shows how much of your AI coding plans you've used: session and weekly limits, credits, and spend, all in one popover. Pin your most important metrics straight into the menu bar. The same usage also shows up as [desktop widgets](docs/widgetkit.md) — battery-style rings for your enabled providers.
 
 <p align="center">
   <img src="assets/screenshot.jpg?v=20260706" alt="OpenUsage menu bar tracker showing Claude and Codex session, weekly, and spend usage" width="900">

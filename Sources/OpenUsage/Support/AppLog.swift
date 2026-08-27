@@ -14,6 +14,7 @@ enum LogTag: String, Sendable {
     case config
     case statusItem = "statusitem"
     case localAPI = "localapi"
+    case widget
     case subprocess
     case lifecycle
     case notifications
