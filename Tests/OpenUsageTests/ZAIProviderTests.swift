@@ -35,7 +35,9 @@ final class ZAIAuthStoreTests: XCTestCase {
     func testReadsJSONAndTrimmedPlainTextConfigFiles() {
         let cases = [
             (ZAIAuthStore.configPaths[0], #"{"api_key":"zai-json"}"#, "zai-json"),
-            (ZAIAuthStore.configPaths[1], "  zai-plain\n", "zai-plain")
+            (ZAIAuthStore.configPaths[1], "  zai-plain\n", "zai-plain"),
+            // The shared secrets-dir file is bare text with no trailing newline handling needed.
+            (ZAIAuthStore.configPaths[2], "zhipu-bare\n", "zhipu-bare")
         ]
 
         for (path, content, expected) in cases {
