@@ -108,7 +108,7 @@ struct UsageRingItem: Codable, Equatable, Identifiable {
     var detailText: String?
     var ringColor: String?
     var label: String?
-    /// Concentric multi-rings when length ≥ 2 (e.g. Cursor Total/Auto/API).
+    /// Concentric multi-rings when length ≥ 2 (e.g. Cursor Total/Cursor Models/Other Models).
     /// For Antigravity this is the default 5h face (Session + Claude).
     var rings: [UsageRingLayer]?
     /// Antigravity weekly alternate (Weekly + Claude Weekly).
@@ -228,8 +228,8 @@ extension UsageSnapshot {
                 percentText: "58%", detailText: nil, ringColor: "#4CD964", label: "Total usage",
                 rings: [
                     UsageRingLayer(label: "Total usage", fraction: 0.58, percentText: "58%", ringColor: "#4CD964"),
-                    UsageRingLayer(label: "Auto usage", fraction: 0.30, percentText: "30%", ringColor: "#5AC8FA"),
-                    UsageRingLayer(label: "API usage", fraction: 0.72, percentText: "72%", ringColor: "#FF9F0A"),
+                    UsageRingLayer(label: "Cursor Models", fraction: 0.30, percentText: "30%", ringColor: "#5AC8FA"),
+                    UsageRingLayer(label: "Other Models", fraction: 0.72, percentText: "72%", ringColor: "#FF9F0A"),
                 ]
             ),
             UsageRingItem(
