@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required for WidgetKit gallery registration. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.robinebers.openusage</string>
+	</array>
+	<!--
+	  Sideload / free-team: provisioning profile usually lacks application-groups.
+	  Sandboxed extensions also get a *container* home, so home-relative exceptions
+	  do NOT reach ~/Library/Group Containers on the real user home.
+
+	  Absolute-path read-only under /Users/ lets the widget read the host-written
+	  snapshot (same pattern many menu-bar apps use for local builds).
+	  Replace with real App Groups (no exception) for Mac App Store.
+	-->
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-only</key>
+	<array>
+		<string>/Users/</string>
+	</array>
+</dict>
+</plist>
