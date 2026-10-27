@@ -14,6 +14,9 @@ set -euo pipefail
 # Usage: script/build_and_run.sh [run|build|logs|verify]
 # Env:   CODESIGN_IDENTITY  override signing identity (exact name or hash)
 #        CONFIG             "release" (default) or "debug"
+#        OPENUSAGE_VERSION  marketing version stamped as CFBundleShortVersionString with a -dev
+#                         suffix (default: latest git tag, e.g. v0.7.16 → 0.7.16-dev)
+#        OPENUSAGE_BUILD    CFBundleVersion (default: the same marketing version, without -dev)
 #        ICLOUD_PROVISIONING_PROFILE  optional override for the development provisioning profile;
 #                         otherwise the newest matching installed profile is selected automatically
 
@@ -25,10 +28,20 @@ APP_DISPLAY="OpenUsage"                 # user-facing app name
 BUNDLE_ID="${BUNDLE_ID:-com.robinebers.openusage.dev}"
 ICLOUD_CONTAINER_ID="iCloud.com.robinebers.openusage.dev"
 MIN_SYSTEM_VERSION="15.0"
-APP_VERSION="0.7.0"
-APP_BUILD="0.7.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Same env as script/release.sh: the tag is the version. Local builds append -dev so a footer
+# like "0.7.16-dev" tracks the current release lane instead of a frozen 0.7.0 placeholder.
+if [ -z "${OPENUSAGE_VERSION:-}" ]; then
+  OPENUSAGE_VERSION=$(git -C "$ROOT_DIR" describe --tags --abbrev=0 2>/dev/null || true)
+fi
+OPENUSAGE_VERSION="${OPENUSAGE_VERSION#v}"
+OPENUSAGE_VERSION="${OPENUSAGE_VERSION%-dev}"
+if [ -z "$OPENUSAGE_VERSION" ]; then
+  OPENUSAGE_VERSION="0.7.0"
+fi
+APP_VERSION="$OPENUSAGE_VERSION"
+APP_BUILD="${OPENUSAGE_BUILD:-$APP_VERSION}"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_DISPLAY.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -44,6 +57,7 @@ SIGN_ENTITLEMENTS="$ROOT_DIR/script/OpenUsage.local.entitlements.plist"
 
 pkill -x "$TARGET_NAME" >/dev/null 2>&1 || true
 
+echo "==> version ${APP_VERSION}-dev (build $APP_BUILD)"
 echo "==> swift build ($CONFIG)"
 swift build -c "$CONFIG"
 BUILD_DIR="$(swift build -c "$CONFIG" --show-bin-path)"

@@ -14,9 +14,11 @@ The project script owns the build/run loop. From the repo root:
 ```
 
 The script builds a signed app bundle under `dist/` and launches it in place — nothing is installed to
-`/Applications`. The dev build uses its own bundle id (`com.robinebers.openusage.dev`), so it keeps its
-own settings and keychain and never disturbs a released OpenUsage. It ships no update feed, so it never
-checks for updates — test updates with a real signed, notarized release build.
+`/Applications`. The footer stamps `CFBundleShortVersionString` as `$OPENUSAGE_VERSION-dev` (default:
+the latest git tag, so `v0.7.16` becomes `0.7.16-dev`). The dev build uses its own bundle id
+(`com.robinebers.openusage.dev`), so it keeps its own settings and keychain and never disturbs a
+released OpenUsage. It ships no update feed, so it never checks for updates — test updates with a real
+signed, notarized release build.
 
 ## Stream logs
 
