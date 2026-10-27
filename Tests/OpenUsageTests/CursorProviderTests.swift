@@ -24,6 +24,28 @@ final class CursorAuthStoreTests: XCTestCase {
         XCTAssertNil(state?.membershipType)
     }
 
+    func testPrefersKeychainWhenSQLiteStoresOnlyEncryptedTokens() {
+        let keychainToken = makeCursorJWT(sub: "github|keychain-user")
+        let encrypted = "cursor-safe-storage:v1:not-a-jwt"
+        let sqlite = KeyValueSQLite(values: [
+            CursorAuthStore.accessTokenKey: encrypted,
+            CursorAuthStore.refreshTokenKey: encrypted,
+            CursorAuthStore.membershipTypeKey: "pro"
+        ])
+        let keychain = ServiceKeychain(values: [
+            CursorAuthStore.keychainAccessTokenService: keychainToken,
+            CursorAuthStore.keychainRefreshTokenService: "keychain-refresh"
+        ])
+        let store = CursorAuthStore(sqlite: sqlite, keychain: keychain)
+
+        let state = store.loadAuthState()
+
+        XCTAssertEqual(state?.source, .keychain)
+        XCTAssertEqual(state?.accessToken, keychainToken)
+        XCTAssertEqual(state?.refreshToken, "keychain-refresh")
+        XCTAssertEqual(state?.membershipType, "pro")
+    }
+
     func testLoadsEnterpriseMembershipTypeFromSQLite() {
         let token = makeCursorJWT(sub: "google-oauth2|enterprise-user")
         let store = CursorAuthStore(

@@ -63,7 +63,9 @@ struct CursorAuthStore: Sendable {
         let keychainAccessToken = readKeychainValue(Self.keychainAccessTokenService)
         let keychainRefreshToken = readKeychainValue(Self.keychainRefreshTokenService)
 
-        let hasSQLiteAuth = sqliteAccessToken != nil || sqliteRefreshToken != nil
+        let sqliteAccessUsable = Self.isUsableSessionToken(sqliteAccessToken)
+        let sqliteRefreshUsable = Self.isUsableSessionToken(sqliteRefreshToken)
+        let hasSQLiteAuth = sqliteAccessUsable || sqliteRefreshUsable
         let hasKeychainAuth = keychainAccessToken != nil || keychainRefreshToken != nil
 
         if hasSQLiteAuth {
@@ -82,10 +84,21 @@ struct CursorAuthStore: Sendable {
             }
 
             return CursorAuthState(
-                accessToken: sqliteAccessToken,
-                refreshToken: sqliteRefreshToken,
+                accessToken: sqliteAccessUsable ? sqliteAccessToken : nil,
+                refreshToken: sqliteRefreshUsable ? sqliteRefreshToken : nil,
                 membershipType: sqliteMembershipType,
                 source: .sqlite
+            )
+        }
+
+        if (sqliteAccessToken != nil || sqliteRefreshToken != nil), hasKeychainAuth {
+            // At-rest encryption stores `cursor-safe-storage:` ciphertext in the state DB. That blob
+            // is not a session JWT; the keychain copy still is, and the membership row is the same account.
+            return CursorAuthState(
+                accessToken: keychainAccessToken,
+                refreshToken: keychainRefreshToken,
+                membershipType: sqliteMembershipType,
+                source: .keychain
             )
         }
 
@@ -154,6 +167,13 @@ struct CursorAuthStore: Sendable {
         }
         let trimmed = subject.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// A usable Cursor session token is a JWT. `cursor-safe-storage:` ciphertext and other opaque
+    /// blobs have no `exp`, so treating them as the session makes every refresh look expired.
+    private static func isUsableSessionToken(_ token: String?) -> Bool {
+        guard let token else { return false }
+        return tokenExpiration(token) != nil || tokenSubject(token) != nil
     }
 
     private static func sqlEscaped(_ value: String) -> String {

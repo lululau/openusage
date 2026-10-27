@@ -37,6 +37,8 @@ into the Grok CLI is not required.
 
 Just be signed into the Cursor app. OpenUsage reads Cursor's local state database (and its keychain entries) for the session tokens; refreshed tokens are persisted back. Nothing extra to install or configure.
 
+When Cursor stores those database tokens as `cursor-safe-storage` ciphertext instead of a session JWT, OpenUsage uses the keychain session and still reads the plan membership from the database. Signing in again does not replace that ciphertext.
+
 ## Spend history
 
 Today, Yesterday, Last 30 Days, and Usage Trend come from Cursor's usage history—the same data shown on Cursor's Usage page. OpenUsage keeps each day on your Mac, separately for each Cursor account, and re-checks today and yesterday on every refresh. It fills in missing older days in the background within 20 seconds per refresh. A failed or short download never erases stored days. The chart appears once all 30 days are stored; heavy accounts may take a couple of refreshes the first time.
